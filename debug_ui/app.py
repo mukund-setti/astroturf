@@ -282,6 +282,7 @@ def run_app():
         "comment_id",
         "docket_id",
         "title",
+        "comment_text",
         "posted_date",
         "last_modified_date",
         "received_date",
