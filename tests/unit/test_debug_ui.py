@@ -6,6 +6,7 @@ from debug_ui.app import (
     get_duplicate_text_stats,
     get_records_per_day,
     get_disk_size_mb,
+    get_exact_hash_baseline_stats,
 )
 
 
@@ -97,3 +98,62 @@ def test_get_records_per_day():
     # Verify exact counts per day
     assert daily.iloc[0]["count"] == 2
     assert daily.iloc[1]["count"] == 1
+
+
+def test_get_exact_hash_baseline_stats():
+    # 1. Empty / None cases
+    assert get_exact_hash_baseline_stats(None, "D1") == {
+        "substantive_rows": 0,
+        "duplicate_hash_groups": 0,
+        "exact_duplicate_comments_covered": 0,
+        "largest_exact_duplicate_group": 0,
+        "exact_duplicate_coverage_pct": 0.0,
+    }
+    assert get_exact_hash_baseline_stats(pd.DataFrame(), "D1") == {
+        "substantive_rows": 0,
+        "duplicate_hash_groups": 0,
+        "exact_duplicate_comments_covered": 0,
+        "largest_exact_duplicate_group": 0,
+        "exact_duplicate_coverage_pct": 0.0,
+    }
+
+    # 2. Missing columns gracefully handled
+    df_missing = pd.DataFrame({"comment_id": ["C1", "C2"]})
+    res_missing = get_exact_hash_baseline_stats(df_missing, "D1")
+    assert res_missing["substantive_rows"] == 2
+    assert res_missing["duplicate_hash_groups"] == 0
+
+    # 3. Multiple dockets & Non-substantive rows ignored
+    data = {
+        "comment_id": ["C1", "C2", "C3", "C4", "C5", "C6"],
+        "docket_id": ["D1", "D1", "D1", "D1", "D2", "D1"],
+        "text_source": [
+            "detail_comment_text",  # D1 sub
+            "detail_comment_text",  # D1 sub
+            "detail_cover_note",  # D1 non-sub (should be ignored)
+            "detail_comment_text",  # D1 sub
+            "detail_comment_text",  # D2 sub (should be ignored for D1)
+            "detail_comment_text",  # D1 sub
+        ],
+        "normalized_text_hash": [
+            "hash_A",  # C1
+            "hash_A",  # C2 (duplicate group A)
+            "hash_A",  # C3 (ignored since non-sub)
+            "hash_B",  # C4 (unique)
+            "hash_A",  # C5 (ignored since D2)
+            "hash_A",  # C6 (duplicate group A, size 3)
+        ],
+    }
+    df = pd.DataFrame(data)
+
+    res = get_exact_hash_baseline_stats(df, "D1")
+    # Substantive rows for D1: C1, C2, C4, C6 => 4 rows
+    assert res["substantive_rows"] == 4
+    # Duplicate groups: only hash_A (since C1, C2, C6 have hash_A and text_source = detail_comment_text) => 1 group
+    assert res["duplicate_hash_groups"] == 1
+    # Comments covered by duplicates: C1, C2, C6 => 3 comments
+    assert res["exact_duplicate_comments_covered"] == 3
+    # Largest duplicate group: size 3 (hash_A has 3 occurrences)
+    assert res["largest_exact_duplicate_group"] == 3
+    # Coverage %: 3 / 4 * 100 = 75.0%
+    assert res["exact_duplicate_coverage_pct"] == 75.0

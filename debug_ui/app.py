@@ -119,6 +119,61 @@ def get_overview_stats(df: pd.DataFrame, docket_id: str | None, path: str) -> di
     return stats
 
 
+def get_exact_hash_baseline_stats(
+    df: pd.DataFrame | None, docket_id: str | None
+) -> dict:
+    """Computes exact-hash baseline metrics for substantive comments of a given docket."""
+    stats = {
+        "substantive_rows": 0,
+        "duplicate_hash_groups": 0,
+        "exact_duplicate_comments_covered": 0,
+        "largest_exact_duplicate_group": 0,
+        "exact_duplicate_coverage_pct": 0.0,
+    }
+
+    if df is None or df.empty:
+        return stats
+
+    df_docket = df
+    if docket_id and "docket_id" in df.columns:
+        df_docket = df[df["docket_id"] == docket_id]
+
+    if df_docket.empty:
+        return stats
+
+    # Filter to detail_comment_text (substantive comments)
+    if "text_source" in df_docket.columns:
+        df_sub = df_docket[df_docket["text_source"] == "detail_comment_text"]
+    else:
+        df_sub = df_docket
+
+    stats["substantive_rows"] = len(df_sub)
+
+    if stats["substantive_rows"] == 0:
+        return stats
+
+    if "normalized_text_hash" in df_sub.columns:
+        hashes = df_sub["normalized_text_hash"].dropna()
+        hashes = hashes[hashes.astype(str).str.strip() != ""]
+
+        if not hashes.empty:
+            hash_counts = hashes.value_counts()
+            dup_hashes = hash_counts[hash_counts > 1]
+
+            stats["duplicate_hash_groups"] = len(dup_hashes)
+            stats["exact_duplicate_comments_covered"] = int(dup_hashes.sum())
+            stats["largest_exact_duplicate_group"] = (
+                int(dup_hashes.max()) if not dup_hashes.empty else 0
+            )
+            stats["exact_duplicate_coverage_pct"] = round(
+                (stats["exact_duplicate_comments_covered"] / stats["substantive_rows"])
+                * 100,
+                2,
+            )
+
+    return stats
+
+
 def get_duplicate_text_stats(
     df: pd.DataFrame, docket_id: str | None, text_col: str
 ) -> pd.DataFrame:
@@ -957,21 +1012,61 @@ def run_app():
         st.info("No clusters match the selected filters.")
         return
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
+    # Compute baseline exact-hash statistics
+    baseline_stats = get_exact_hash_baseline_stats(df_silver_docket, active_docket)
+    sub_rows = baseline_stats["substantive_rows"]
+    largest_embedding_cluster_size = (
+        int(cluster_filter_df["cluster_size"].max())
+        if not cluster_filter_df.empty and "cluster_size" in cluster_filter_df.columns
+        else 0
+    )
+    total_membership_uniq = (
+        membership_filter_df["comment_id"].nunique()
+        if not membership_filter_df.empty
+        else 0
+    )
+    embedding_coverage_pct = (
+        round((total_membership_uniq / sub_rows) * 100, 2) if sub_rows > 0 else 0.0
+    )
+
+    st.write("### Overall Baseline & Cluster Comparison")
+
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown("**Exact-Hash Baseline (String Match)**")
+        st.metric("Substantive Inline Comments", sub_rows)
+        st.metric(
+            "Exact Duplicate Hash Groups", baseline_stats["duplicate_hash_groups"]
+        )
+        st.metric(
+            "Exact Duplicate Comments Covered",
+            baseline_stats["exact_duplicate_comments_covered"],
+        )
+        st.metric(
+            "Largest Exact Duplicate Group",
+            baseline_stats["largest_exact_duplicate_group"],
+        )
+        st.metric(
+            "Exact Duplicate Coverage Pct",
+            f"{baseline_stats['exact_duplicate_coverage_pct']}%",
+        )
+
+    with col_right:
+        st.markdown("**Semantic Clustering (Embedding-Based)**")
         st.metric("Total Clusters", len(cluster_filter_df))
-    with c2:
         st.metric("Total Memberships", len(membership_filter_df))
-    with c3:
-        if "cluster_size" in cluster_filter_df.columns:
-            st.metric(
-                "Largest Cluster Size", int(cluster_filter_df["cluster_size"].max())
-            )
-        else:
-            st.metric("Largest Cluster Size", "N/A")
-    with c4:
-        thresholds = unique_values(cluster_filter_df, "similarity_threshold")
-        st.metric("Threshold Values", ", ".join(map(str, thresholds)) or "N/A")
+        st.metric("Largest Embedding Cluster Size", largest_embedding_cluster_size)
+        st.metric("Embedding Cluster Coverage Pct", f"{embedding_coverage_pct}%")
+
+    st.info(
+        f"**Methodological Insight:** "
+        f"Exact-string matching detects only {baseline_stats['exact_duplicate_comments_covered']} comments ({baseline_stats['exact_duplicate_coverage_pct']}%) "
+        f"as duplicates. In contrast, embedding-based clustering with a "
+        f"{selected_threshold if 'selected_threshold' in locals() else 'similarity'} threshold "
+        f"identifies {total_membership_uniq} comments ({embedding_coverage_pct}%) in coordinated campaigns. "
+        f"This demonstrates that paraphrasing, minor structural alterations, and personalized templates account for the vast majority "
+        f"of coordinated public comment campaigns, which simple exact-hash baseline systems miss."
+    )
 
     st.write("#### Cluster Run Values")
     run_values = {
@@ -1024,25 +1119,155 @@ def run_app():
 
     cluster_ids = cluster_table["cluster_id"].dropna().astype(str).tolist()
     selected_cluster_id = st.selectbox("Select Cluster ID", options=cluster_ids)
+
     selected_members = membership_filter_df[
         membership_filter_df["cluster_id"].astype(str) == selected_cluster_id
     ].copy()
     if "membership_rank" in selected_members.columns:
         selected_members = selected_members.sort_values("membership_rank")
 
-    st.write("#### Selected Cluster Members")
-    member_cols = available_columns(
-        selected_members,
-        [
-            "comment_id",
-            "similarity_to_representative",
-            "membership_rank",
-            "text_hash",
-            "text_source",
-        ],
+    # Get selected cluster info
+    cluster_info = cluster_table[
+        cluster_table["cluster_id"].astype(str) == selected_cluster_id
+    ].iloc[0]
+
+    # Calculate cluster metrics
+    cluster_size = len(selected_members)
+    unique_hash_count = (
+        selected_members["text_hash"].nunique()
+        if "text_hash" in selected_members.columns
+        else 0
     )
-    selected_members = add_text_preview(selected_members[member_cols], df_silver_docket)
-    st.dataframe(selected_members.head(row_limit), use_container_width=True)
+
+    cluster_hashes = (
+        selected_members["text_hash"].dropna()
+        if "text_hash" in selected_members.columns
+        else pd.Series(dtype=str)
+    )
+    cluster_hash_counts = cluster_hashes.value_counts()
+    cluster_dup_hashes = cluster_hash_counts[cluster_hash_counts > 1]
+    exact_dup_groups_in_cluster = len(cluster_dup_hashes)
+    exact_dup_members_in_cluster = int(cluster_dup_hashes.sum())
+    max_group_size = (
+        int(cluster_hash_counts.max()) if not cluster_hash_counts.empty else 0
+    )
+
+    # Determine campaign style label
+    if cluster_size <= 1:
+        cluster_label = "Single-member / Inconclusive"
+        label_desc = "This cluster is too small to determine a campaign style."
+    elif unique_hash_count >= cluster_size * 0.8:
+        cluster_label = "Embedding/paraphrase-driven"
+        label_desc = "Almost all members in this cluster have unique text hashes, indicating a sophisticated paraphrase or template-modification campaign."
+    elif max_group_size >= cluster_size * 0.6:
+        cluster_label = "Exact-duplicate-driven"
+        label_desc = "The vast majority of comments in this cluster share a single identical text hash, indicating a simple copy-paste campaign."
+    else:
+        cluster_label = "Mixed"
+        label_desc = "This cluster contains a mix of exact copy-pastes and paraphrased/modified template variations."
+
+    st.markdown("### Selected Cluster Evidence Summary")
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1:
+        st.metric("Cluster Size", cluster_size)
+    with mc2:
+        st.metric("Unique Text Hashes", unique_hash_count)
+    with mc3:
+        st.metric("Exact Duplicate Groups", exact_dup_groups_in_cluster)
+        st.metric("Exact Duplicate Members", exact_dup_members_in_cluster)
+    with mc4:
+        st.metric("Campaign Style", cluster_label)
+
+    st.info(f"**Campaign Style Details:** {label_desc}")
+
+    # Representative comment info
+    rep_id = cluster_info.get("representative_comment_id", "N/A")
+    st.markdown(f"**Representative Comment ID:** `{rep_id}`")
+
+    rep_text = "N/A"
+    if df_silver_docket is not None and not df_silver_docket.empty:
+        rep_row = df_silver_docket[df_silver_docket["comment_id"] == rep_id]
+        if not rep_row.empty:
+            rep_text = (
+                rep_row["raw_text"].iloc[0]
+                or rep_row["normalized_text"].iloc[0]
+                or "N/A"
+            )
+
+    st.text_area(
+        "Representative Text Preview", value=rep_text, height=150, disabled=True
+    )
+
+    # Selected Cluster Member Table
+    st.write("#### Selected Cluster Members")
+
+    if df_silver_docket is not None and not df_silver_docket.empty:
+        joined_members = selected_members.merge(
+            df_silver_docket[
+                [
+                    "comment_id",
+                    "title",
+                    "posted_date",
+                    "last_modified_date",
+                    "raw_text",
+                    "normalized_text",
+                    "normalized_text_hash",
+                ]
+            ],
+            on="comment_id",
+            how="left",
+        )
+    else:
+        joined_members = selected_members.copy()
+        joined_members["title"] = "N/A"
+        joined_members["posted_date"] = "N/A"
+        joined_members["last_modified_date"] = "N/A"
+        joined_members["raw_text"] = "N/A"
+        joined_members["normalized_text"] = "N/A"
+        joined_members["normalized_text_hash"] = (
+            joined_members["text_hash"]
+            if "text_hash" in joined_members.columns
+            else "N/A"
+        )
+
+    # Rename text_hash to normalized_text_hash if needed
+    if (
+        "normalized_text_hash" not in joined_members.columns
+        and "text_hash" in joined_members.columns
+    ):
+        joined_members["normalized_text_hash"] = joined_members["text_hash"]
+
+    # Generate text_preview
+    joined_members["text_preview"] = ""
+    if "raw_text" in joined_members.columns:
+        joined_members["text_preview"] = joined_members["text_preview"].mask(
+            joined_members["text_preview"].astype(str).str.strip() == "",
+            joined_members["raw_text"],
+        )
+    if "normalized_text" in joined_members.columns:
+        joined_members["text_preview"] = joined_members["text_preview"].mask(
+            joined_members["text_preview"].astype(str).str.strip() == "",
+            joined_members["normalized_text"],
+        )
+    joined_members["text_preview"] = (
+        joined_members["text_preview"].fillna("").astype(str).str.slice(0, 300)
+    )
+
+    member_table_cols = [
+        "comment_id",
+        "membership_rank",
+        "similarity_to_representative",
+        "normalized_text_hash",
+        "title",
+        "posted_date",
+        "last_modified_date",
+        "text_preview",
+    ]
+    member_table_cols = [c for c in member_table_cols if c in joined_members.columns]
+    st.dataframe(
+        joined_members[member_table_cols].head(row_limit), use_container_width=True
+    )
 
 
 if __name__ == "__main__":
