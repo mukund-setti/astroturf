@@ -385,7 +385,7 @@ def run_app():
                 "Column Name": df_docket.columns,
                 "Pandas Dtype": df_docket.dtypes.astype(str),
                 "Null Count": null_counts.values,
-                "Null %": round((null_counts.values / len(df_docket)) * 100, 2),
+                "Null %": ((null_counts / len(df_docket)) * 100).round(2).values,
             }
         )
         st.dataframe(schema_df, use_container_width=True)
