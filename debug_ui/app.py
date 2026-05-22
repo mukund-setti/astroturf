@@ -203,6 +203,9 @@ def run_app():
     bronze_path = st.sidebar.text_input(
         "Bronze Table Path", value="./data/bronze/raw_comments"
     )
+    silver_path = st.sidebar.text_input(
+        "Silver Table Path", value="./data/silver/parsed_comments"
+    )
     row_limit = st.sidebar.selectbox("Row Limit", options=[25, 100, 500, 1000], index=0)
 
     df = load_delta_table(bronze_path)
@@ -481,6 +484,104 @@ def run_app():
         st.warning(
             "Raw comment body not available in bronze; ParserAgent will populate silver parsed text."
         )
+
+    # Silver Parsed Comments Section
+    st.markdown("---")
+    st.subheader("Silver Parsed Comments Panel")
+
+    df_silver = load_delta_table(silver_path)
+    if df_silver is not None and not df_silver.empty:
+        df_silver_docket = df_silver
+        if "docket_id" in df_silver.columns:
+            df_silver_docket = df_silver[df_silver["docket_id"] == active_docket]
+
+        if not df_silver_docket.empty:
+            total_silver = len(df_silver_docket)
+            st.markdown(
+                f"Found silver table at `{silver_path}` with **{total_silver}** parsed rows for docket `{active_docket}`."
+            )
+
+            # Metrics
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("Total Silver Rows", total_silver)
+            with c2:
+                if "char_count" in df_silver_docket.columns:
+                    avg_char = round(df_silver_docket["char_count"].mean(), 1)
+                    st.metric("Average Char Count", avg_char)
+                else:
+                    st.metric("Average Char Count", "N/A")
+            with c3:
+                if "parse_status" in df_silver_docket.columns:
+                    err_count = (df_silver_docket["parse_status"] == "error").sum()
+                    st.metric("Parse Errors", int(err_count))
+                else:
+                    st.metric("Parse Errors", "N/A")
+
+            # Breakdowns
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                st.write("#### Parse Status breakdown")
+                if "parse_status" in df_silver_docket.columns:
+                    status_counts = (
+                        df_silver_docket["parse_status"].value_counts().reset_index()
+                    )
+                    status_counts.columns = ["parse_status", "count"]
+                    st.dataframe(status_counts, use_container_width=True)
+            with col_b2:
+                st.write("#### Text Source breakdown")
+                if "text_source" in df_silver_docket.columns:
+                    source_counts = (
+                        df_silver_docket["text_source"].value_counts().reset_index()
+                    )
+                    source_counts.columns = ["text_source", "count"]
+                    st.dataframe(source_counts, use_container_width=True)
+
+            # Top duplicates
+            st.write("#### Top Duplicate Normalized Text Hashes")
+            if "normalized_text_hash" in df_silver_docket.columns:
+                hash_counts = df_silver_docket["normalized_text_hash"].dropna()
+                hash_counts = hash_counts[hash_counts != ""]
+                if not hash_counts.empty:
+                    dup_hashes = hash_counts.value_counts()
+                    dup_hashes = dup_hashes[dup_hashes > 1].reset_index()
+                    dup_hashes.columns = ["normalized_text_hash", "count"]
+                    if not dup_hashes.empty:
+                        # Find original text sample for each hash
+                        hash_to_sample = {}
+                        for _, r in df_silver_docket.iterrows():
+                            h = r.get("normalized_text_hash")
+                            t = r.get("normalized_text") or r.get("raw_text")
+                            if h and t and h not in hash_to_sample:
+                                hash_to_sample[h] = str(t)
+                        dup_hashes["sample_text"] = dup_hashes[
+                            "normalized_text_hash"
+                        ].map(hash_to_sample)
+                        st.dataframe(dup_hashes.head(10), use_container_width=True)
+                    else:
+                        st.success("No duplicate normalized text hashes found.")
+                else:
+                    st.info("No normalized text hashes available.")
+
+            # Table preview
+            st.write("#### Parsed Comments Preview")
+            preview_cols = [
+                "comment_id",
+                "parse_status",
+                "text_source",
+                "char_count",
+                "normalized_text",
+            ]
+            preview_cols = [c for c in preview_cols if c in df_silver_docket.columns]
+            st.dataframe(
+                df_silver_docket[preview_cols].head(row_limit), use_container_width=True
+            )
+        else:
+            st.warning(
+                f"Silver table loaded, but no parsed comments found for docket `{active_docket}`."
+            )
+    else:
+        st.info("“Silver table not found yet. Run ParserAgent.”")
 
 
 if __name__ == "__main__":
