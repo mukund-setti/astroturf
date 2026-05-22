@@ -299,7 +299,21 @@ class IngestionAgent:
             "page[size]": page_size,
         }
         if cursor is not None:
-            base_params["filter[lastModifiedDate][ge]"] = cursor
+            # regulations.gov v4 API expects Eastern Time formatted as 'YYYY-MM-DD HH:MM:SS'
+            try:
+                import zoneinfo
+
+                clean_str = cursor.replace("Z", "+00:00")
+                dt_utc = datetime.fromisoformat(clean_str)
+                eastern_tz = zoneinfo.ZoneInfo("America/New_York")
+                dt_eastern = dt_utc.astimezone(eastern_tz)
+                eastern_str = dt_eastern.strftime("%Y-%m-%d %H:%M:%S")
+                base_params["filter[lastModifiedDate][ge]"] = eastern_str
+            except Exception as e:
+                log.warning(
+                    "Could not convert cursor %r to Eastern Time: %s", cursor, e
+                )
+                base_params["filter[lastModifiedDate][ge]"] = cursor
 
         page_number = 1
         while page_number <= MAX_PAGES_PER_REQUEST:

@@ -216,7 +216,14 @@ def test_date_window_splitting_recovers_all_rows_above_5000(tmp_path, api_key):
         records = [_comment(page_idx * 250 + j, docket, lmd) for j in range(250)]
         # Every page in batch 1 has links.next — the API would still report more on page 20.
         batch1_pages.append(_page(records, has_next=True))
-    cursor_after_batch1 = f"2024-01-{MAX_PAGES_PER_REQUEST:02d}T00:00:00Z"
+    from datetime import datetime
+    import zoneinfo
+
+    utc_str = f"2024-01-{MAX_PAGES_PER_REQUEST:02d}T00:00:00Z"
+    dt_utc = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+    eastern_tz = zoneinfo.ZoneInfo("America/New_York")
+    dt_eastern = dt_utc.astimezone(eastern_tz)
+    cursor_after_batch1 = dt_eastern.strftime("%Y-%m-%d %H:%M:%S")
 
     # Batch 2: 500 more comments past the cursor, across 2 pages.
     batch2_p1 = _page(
