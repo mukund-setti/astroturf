@@ -171,8 +171,9 @@ What each table holds:
     the smoke test and unit tests; **not semantic**.
   - `LocalSentenceTransformerBackend` — `BAAI/bge-large-en-v1.5` via
     `sentence-transformers`, byte-identical to the production model.
-  - `DatabricksFoundationModelBackend` — stub for `databricks-bge-large-en`,
-    `encode` raises `NotImplementedError` until we wire it up on Databricks.
+  - `DatabricksFoundationModelBackend` — Databricks SDK-backed route to
+    `databricks-bge-large-en`; mock-tested locally, pending an approved live
+    Databricks run.
 - Re-embed cache is keyed on `text_hash`, so updated parser output flows
   through and unchanged rows are skipped for free.
 
@@ -239,9 +240,9 @@ Two things stand out:
 
 ### Databricks-shaped, but not yet wired
 
-- `DatabricksFoundationModelBackend` exists as a stub (ADR-0005); the local
-  model is byte-identical to its planned `databricks-bge-large-en` endpoint, so
-  the cutover should be a config change and an `encode` implementation.
+- `DatabricksFoundationModelBackend` is implemented against the Databricks SDK
+  for the `databricks-bge-large-en` endpoint; the remaining proof is an
+  approved live Databricks run on promoted sample data.
 - Tables are written in real Delta format, so a Databricks workspace can mount
   or copy `./data/...` and read them directly without a re-format pass.
 - Spark `StructType`s are derived from the same Pydantic models, so a Spark
@@ -276,9 +277,8 @@ Two things stand out:
 
 ## Next engineering milestones (in order)
 
-1. Run real embeddings on a tiny CFPB sample with the local
-   `sentence-transformers` backend, then again on a Databricks-flavored path
-   once the Foundation Model backend is wired up.
+1. Run the Databricks Foundation Model backend on a Databricks-flavored path
+   once live workspace access is explicitly approved.
 2. Build the first `ClusteringAgent` prototype — MinHash / LSH candidate gen
    plus cosine confirmation — and write `gold.comment_clusters` with template,
    size, and confidence.

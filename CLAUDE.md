@@ -57,13 +57,13 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - ParserAgent v1 complete: deterministic title / body / missing parsing into `silver.parsed_comments`.
 - ParserAgent v2A complete: fetches per-comment regulations.gov detail JSON, enriches parsed comments, writes `silver.comment_details` and `silver.comment_attachments`, gated by a `max_detail_fetches` safety cap.
 - AttachmentDownloaderAgent complete for v2B phase 1: downloads attachment binaries, computes checksums, updates download metadata. PDF / DOCX text extraction, reconciliation back into `parsed_comments`, OCR, and LLM extraction are still deferred.
-- EmbeddingAgent complete for comment-level embeddings: writes `silver.comment_embeddings`, with a mock backend, a local `sentence-transformers` backend, and a Databricks Foundation Model backend stub (see ADR-0005).
+- EmbeddingAgent complete for comment-level embeddings: writes `silver.comment_embeddings`, with a mock backend, a local `sentence-transformers` backend, and a Databricks Foundation Model backend implemented against the Databricks SDK (mock-tested only so far; no live Databricks request yet).
 - Mock embedding smoke test passed on the CFPB sample: 11 substantive candidates embedded; rerun produced 11 cache hits and 0 writes.
 - Debug UI exists for bronze / silver / details / attachments inspection.
-- Latest test status: 53 unit tests passing, Ruff clean.
+- Latest test status: 76 unit tests passing, Ruff clean, Ruff format clean.
 
 ### Next priorities
 1. Write `docs/system-map.md` and `docs/demo-story.md` so the project narrative is legible end-to-end.
-2. Run real embeddings on a tiny sample using the local `sentence-transformers` backend (and the Databricks Foundation Model backend once wired up).
+2. Run the Databricks Foundation Model backend on a Databricks-flavored path once live workspace access is explicitly approved.
 3. Build the first ClusteringAgent prototype over the embeddings.
 4. Later: attachment text extraction (ParserAgent v2B phases 2-4) and Databricks Vector Search integration.

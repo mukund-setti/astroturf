@@ -13,6 +13,7 @@ from agents.embedding.agent import (
     DEFAULT_EMBEDDINGS_PATH,
     DEFAULT_MODEL,
     DEFAULT_PARSED_PATH,
+    DatabricksFoundationModelBackend,
     EmbeddingAgent,
     EmbeddingInput,
     LocalSentenceTransformerBackend,
@@ -42,14 +43,20 @@ def main() -> None:
     parser.add_argument("--embeddings-path", default=DEFAULT_EMBEDDINGS_PATH)
     parser.add_argument(
         "--model",
-        default=DEFAULT_MODEL,
-        help="Embedding model name (e.g. BAAI/bge-large-en-v1.5)",
+        default=None,
+        help=(
+            "Embedding model name. Defaults to BAAI/bge-large-en-v1.5 for local "
+            "and databricks-bge-large-en for Databricks."
+        ),
     )
     parser.add_argument(
         "--backend",
-        choices=["local", "mock"],
+        choices=["databricks", "local", "mock"],
         default="local",
-        help="Embedding backend (local sentence-transformers or deterministic mock)",
+        help=(
+            "Embedding backend (databricks Foundation Model API, local "
+            "sentence-transformers, or deterministic mock)"
+        ),
     )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--max-rows", type=int, default=None)
@@ -69,15 +76,23 @@ def main() -> None:
 
     load_simple_env()
 
+    model_name = args.model
+    if model_name is None:
+        model_name = (
+            "databricks-bge-large-en" if args.backend == "databricks" else DEFAULT_MODEL
+        )
+
     if args.backend == "local":
-        backend = LocalSentenceTransformerBackend(model_name=args.model)
+        backend = LocalSentenceTransformerBackend(model_name=model_name)
+    elif args.backend == "databricks":
+        backend = DatabricksFoundationModelBackend(model_name=model_name)
     else:
-        backend = MockBackend(model_name=args.model)
+        backend = MockBackend(model_name=model_name)
 
     print(f"Starting EmbeddingAgent for docket: {args.docket}")
     print(f"Parsed path:     {args.parsed_path}")
     print(f"Embeddings path: {args.embeddings_path}")
-    print(f"Model:           {args.model}")
+    print(f"Model:           {model_name}")
     print(f"Backend:         {args.backend}")
 
     agent = EmbeddingAgent(backend=backend)
@@ -85,7 +100,7 @@ def main() -> None:
         docket_id=args.docket,
         parsed_path=args.parsed_path,
         embeddings_path=args.embeddings_path,
-        model_name=args.model,
+        model_name=model_name,
         batch_size=args.batch_size,
         max_rows=args.max_rows,
         force_reembed=args.force_reembed,

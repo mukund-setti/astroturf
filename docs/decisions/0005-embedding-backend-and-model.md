@@ -20,7 +20,7 @@ We make the following technical decisions:
 1. **Embedding Model Selection**: We adopt `BAAI/bge-large-en-v1.5` as our canonical embedding model. When run locally via the `sentence-transformers` library, this produces 1024-dimensional float vectors that are byte-identical to the production-grade `databricks-bge-large-en` Foundation Model API endpoint on Databricks.
 2. **Backend Abstraction**: We abstract all embedding operations behind an `EmbeddingBackend` base class. We will implement two concrete backends, switched via runtime config:
    - `LocalSentenceTransformerBackend`: Loads and runs the model locally via PyTorch / Hugging Face.
-   - `DatabricksFoundationModelBackend`: A stub for production Databricks Foundation Model API routing (to be implemented during Databricks deployment).
+   - `DatabricksFoundationModelBackend`: Databricks SDK routing to the production Foundation Model endpoint, mock-tested locally before live Databricks validation.
 3. **Variable-Size Delta Representation**: We represent the `embedding_vector` in `silver.comment_embeddings` using the variable-size **`pa.list_(pa.float32())`** PyArrow type (Spark `ArrayType(FloatType)`).
 4. **Vector Search Mapping Strategy**: To resolve the fixed-dimension index requirement in Databricks Vector Search, we will filter the source Delta table by `embedding_model` during the Vector Search Index sync step. This maps a single, model-specific slice of the Delta table to its own respective fixed-dimension VS index.
 

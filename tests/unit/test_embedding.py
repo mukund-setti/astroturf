@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -13,6 +14,7 @@ import pytest
 from deltalake import DeltaTable
 
 from agents.embedding.agent import (
+    DatabricksFoundationModelBackend,
     EmbeddingAgent,
     EmbeddingInput,
     MockBackend,
@@ -349,6 +351,171 @@ def test_mock_backend_model_name_is_configurable() -> None:
     assert backend.model_name == "mock-test-v1"
     assert backend.backend_name == "mock"
     assert backend.dimension == 4
+
+
+class _FakeServingEndpoints:
+    def __init__(self, responses: list[Any]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, Any]] = []
+
+    def query(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
+
+
+class _FakeDatabricksClient:
+    def __init__(self, responses: list[Any]) -> None:
+        self.serving_endpoints = _FakeServingEndpoints(responses)
+
+
+class _HttpError(Exception):
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def test_databricks_backend_defaults() -> None:
+    backend = DatabricksFoundationModelBackend()
+
+    assert backend.model_name == "databricks-bge-large-en"
+    assert backend.dimension == 1024
+    assert backend.backend_name == "databricks_foundation_model"
+
+
+def test_databricks_backend_request_payload_and_response_parsing() -> None:
+    client = _FakeDatabricksClient(
+        [
+            {
+                "data": [
+                    {"embedding": [3.0, 4.0]},
+                    {"embedding": [0.0, 5.0]},
+                ]
+            }
+        ]
+    )
+    backend = DatabricksFoundationModelBackend(
+        model_name="databricks-bge-large-en",
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    vectors = backend.encode(["first text", "second text"])
+
+    assert client.serving_endpoints.calls == [
+        {
+            "name": "databricks-bge-large-en",
+            "input": ["first text", "second text"],
+        }
+    ]
+    assert np.allclose(vectors, [[0.6, 0.8], [0.0, 1.0]])
+    assert backend.request_count == 1
+    assert backend.retry_count == 0
+    assert backend.failed_batch_count == 0
+    assert backend.total_latency_seconds >= 0.0
+
+
+def test_databricks_backend_parses_sdk_object_response() -> None:
+    client = _FakeDatabricksClient(
+        [
+            SimpleNamespace(
+                data=[
+                    SimpleNamespace(embedding=[1.0, 0.0]),
+                    SimpleNamespace(embedding=[0.0, 1.0]),
+                ]
+            )
+        ]
+    )
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    assert backend.encode(["a", "b"]) == [[1.0, 0.0], [0.0, 1.0]]
+
+
+def test_databricks_backend_vector_count_mismatch_raises() -> None:
+    client = _FakeDatabricksClient([{"data": [{"embedding": [1.0, 0.0]}]}])
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    with pytest.raises(RuntimeError, match="returned 1 vectors for 2 input texts"):
+        backend.encode(["a", "b"])
+
+
+def test_databricks_backend_dimension_mismatch_raises() -> None:
+    client = _FakeDatabricksClient([{"data": [{"embedding": [1.0, 0.0, 0.0]}]}])
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    with pytest.raises(RuntimeError, match="has length 3 but expected 2"):
+        backend.encode(["a"])
+
+
+def test_databricks_backend_non_numeric_vector_raises() -> None:
+    client = _FakeDatabricksClient([{"data": [{"embedding": [1.0, "bad"]}]}])
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    with pytest.raises(RuntimeError, match="non-numeric value"):
+        backend.encode(["a"])
+
+
+def test_databricks_backend_retries_transient_failure() -> None:
+    client = _FakeDatabricksClient(
+        [
+            _HttpError(429),
+            {"data": [{"embedding": [1.0, 0.0]}]},
+        ]
+    )
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    assert backend.encode(["a"]) == [[1.0, 0.0]]
+    assert len(client.serving_endpoints.calls) == 2
+    assert backend.request_count == 2
+    assert backend.retry_count == 1
+    assert backend.failed_batch_count == 0
+
+
+def test_databricks_backend_raises_after_retryable_failures() -> None:
+    client = _FakeDatabricksClient([_HttpError(500), _HttpError(503)])
+    backend = DatabricksFoundationModelBackend(
+        dimension=2,
+        client=client,
+        retry_max_attempts=2,
+        retry_wait_min_seconds=0.0,
+        retry_wait_max_seconds=0.0,
+    )
+
+    with pytest.raises(_HttpError):
+        backend.encode(["a"])
+    assert len(client.serving_endpoints.calls) == 2
+    assert backend.request_count == 2
+    assert backend.retry_count == 1
+    assert backend.failed_batch_count == 1
 
 
 def test_corrupt_input_skip_and_log(

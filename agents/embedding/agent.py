@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import DeltaTable
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from shared.delta_utils.silver import ensure_schema, merge_comment_embeddings
 from shared.schemas.comment_embeddings import (
@@ -130,20 +132,33 @@ class LocalSentenceTransformerBackend(EmbeddingBackend):
 
 
 class DatabricksFoundationModelBackend(EmbeddingBackend):
-    """Production stub for Databricks Foundation Model API routing (ADR-0005).
+    """Databricks Foundation Model API backend for production embeddings.
 
-    Constructor takes ``dimension`` so the stub is constructible in environments
-    without a live endpoint. ``encode`` is unimplemented until Databricks
-    deployment.
+    Uses ``databricks-sdk`` lazy auth so it works with Databricks-native
+    credentials inside Workflows and with ``DATABRICKS_HOST`` /
+    ``DATABRICKS_TOKEN`` in local shells. Tests inject a mock client and never
+    make live requests.
     """
 
     def __init__(
         self,
         model_name: str = "databricks-bge-large-en",
         dimension: int = 1024,
+        client: Any | None = None,
+        retry_max_attempts: int = 3,
+        retry_wait_min_seconds: float = 1.0,
+        retry_wait_max_seconds: float = 10.0,
     ) -> None:
         self._model_name = model_name
         self._dimension = dimension
+        self._client = client
+        self._retry_max_attempts = retry_max_attempts
+        self._retry_wait_min_seconds = retry_wait_min_seconds
+        self._retry_wait_max_seconds = retry_wait_max_seconds
+        self.request_count = 0
+        self.retry_count = 0
+        self.failed_batch_count = 0
+        self.total_latency_seconds = 0.0
 
     @property
     def model_name(self) -> str:
@@ -158,10 +173,103 @@ class DatabricksFoundationModelBackend(EmbeddingBackend):
         return "databricks_foundation_model"
 
     def encode(self, texts: list[str]) -> list[list[float]]:
-        raise NotImplementedError(
-            "DatabricksFoundationModelBackend.encode is a stub; implement during "
-            "Databricks deployment per ADR-0005."
+        if not texts:
+            return []
+
+        start_time = time.monotonic()
+        try:
+            response = self._query_with_retries(texts)
+        except Exception:
+            self.failed_batch_count += 1
+            raise
+        finally:
+            self.total_latency_seconds += time.monotonic() - start_time
+
+        vectors = self._extract_embeddings(response)
+        if len(vectors) != len(texts):
+            raise RuntimeError(
+                f"Databricks endpoint returned {len(vectors)} vectors for "
+                f"{len(texts)} input texts"
+            )
+        return [
+            self._validate_and_normalize_vector(v, i) for i, v in enumerate(vectors)
+        ]
+
+    def _workspace_client(self) -> Any:
+        if self._client is None:
+            from databricks.sdk import WorkspaceClient
+
+            self._client = WorkspaceClient()
+        return self._client
+
+    def _query_with_retries(self, texts: list[str]) -> Any:
+        retryer = Retrying(
+            retry=retry_if_exception(_is_retryable_databricks_error),
+            stop=stop_after_attempt(self._retry_max_attempts),
+            wait=wait_exponential(
+                multiplier=self._retry_wait_min_seconds,
+                min=self._retry_wait_min_seconds,
+                max=self._retry_wait_max_seconds,
+            ),
+            before_sleep=self._record_retry,
+            reraise=True,
         )
+        return retryer(self._query_once, texts)
+
+    def _query_once(self, texts: list[str]) -> Any:
+        self.request_count += 1
+        return self._workspace_client().serving_endpoints.query(
+            name=self._model_name,
+            input=texts,
+        )
+
+    def _record_retry(self, _retry_state: Any) -> None:
+        self.retry_count += 1
+
+    def _extract_embeddings(self, response: Any) -> list[Any]:
+        data = _response_value(response, "data")
+        if data is None:
+            raise RuntimeError("Databricks embedding response did not include data")
+        if not isinstance(data, list):
+            raise RuntimeError("Databricks embedding response data must be a list")
+        return [_response_value(item, "embedding") for item in data]
+
+    def _validate_and_normalize_vector(
+        self, vector: Any, response_index: int
+    ) -> list[float]:
+        if not isinstance(vector, list):
+            raise RuntimeError(
+                f"Databricks embedding at index {response_index} is not a list"
+            )
+        if len(vector) != self._dimension:
+            raise RuntimeError(
+                f"Databricks embedding at index {response_index} has length "
+                f"{len(vector)} but expected {self._dimension}"
+            )
+
+        values: list[float] = []
+        for value_index, value in enumerate(vector):
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise RuntimeError(
+                    f"Databricks embedding at index {response_index} contains "
+                    f"non-numeric value at position {value_index}"
+                )
+            numeric_value = float(value)
+            if not math.isfinite(numeric_value):
+                raise RuntimeError(
+                    f"Databricks embedding at index {response_index} contains "
+                    f"non-finite value at position {value_index}"
+                )
+            values.append(numeric_value)
+
+        norm = float(np.linalg.norm(np.array(values, dtype=np.float32)))
+        if norm == 0.0:
+            raise RuntimeError(
+                f"Databricks embedding at index {response_index} has zero norm"
+            )
+        if abs(norm - 1.0) <= 1e-5:
+            return values
+        return (np.array(values, dtype=np.float32) / norm).astype(np.float32).tolist()
 
 
 class MockBackend(EmbeddingBackend):
@@ -370,6 +478,18 @@ class EmbeddingAgent:
             mlflow.log_metric("stale_reembedded_count", stale_count)
             mlflow.log_metric("rows_written", rows_written)
             mlflow.log_metric("duration_seconds", duration)
+            if hasattr(self.backend, "request_count"):
+                mlflow.log_metric("fm_request_count", self.backend.request_count)
+            if hasattr(self.backend, "retry_count"):
+                mlflow.log_metric("fm_retry_count", self.backend.retry_count)
+            if hasattr(self.backend, "failed_batch_count"):
+                mlflow.log_metric(
+                    "fm_failed_batch_count", self.backend.failed_batch_count
+                )
+            if hasattr(self.backend, "total_latency_seconds"):
+                mlflow.log_metric(
+                    "fm_total_latency_seconds", self.backend.total_latency_seconds
+                )
 
         log.info(
             "EmbeddingAgent run complete. Candidates=%d, CacheHits=%d, Corrupt=%d, "
@@ -399,6 +519,7 @@ class EmbeddingAgent:
                 "embedding_model": self.backend.model_name,
                 "embedding_dim": self.backend.dimension,
                 "backend": self.backend.backend_name,
+                **_foundation_model_metrics(self.backend),
             },
         )
 
@@ -451,3 +572,47 @@ def _rows_to_arrow(rows: list[CommentEmbedding]) -> pa.Table:
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)
+
+
+def _foundation_model_metrics(backend: EmbeddingBackend) -> dict[str, int | float]:
+    metrics: dict[str, int | float] = {}
+    for attr, metric_name in (
+        ("request_count", "fm_request_count"),
+        ("retry_count", "fm_retry_count"),
+        ("failed_batch_count", "fm_failed_batch_count"),
+        ("total_latency_seconds", "fm_total_latency_seconds"),
+    ):
+        value = getattr(backend, attr, None)
+        if isinstance(value, int | float):
+            metrics[metric_name] = value
+    return metrics
+
+
+def _response_value(obj: Any, key: str) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+
+def _is_retryable_databricks_error(exc: BaseException) -> bool:
+    if isinstance(exc, TimeoutError):
+        return True
+
+    status_code = _extract_status_code(exc)
+    if status_code is None:
+        return False
+    return status_code == 429 or 500 <= status_code <= 599
+
+
+def _extract_status_code(exc: BaseException) -> int | None:
+    for attr in ("status_code", "http_status_code"):
+        value = getattr(exc, attr, None)
+        if isinstance(value, int):
+            return value
+
+    response = getattr(exc, "response", None)
+    value = getattr(response, "status_code", None)
+    if isinstance(value, int):
+        return value
+
+    return None

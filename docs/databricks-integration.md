@@ -113,10 +113,10 @@ The sample should include the minimum set needed for the demo:
 
 ## Foundation Model backend requirements
 
-`DatabricksFoundationModelBackend` currently exists as a constructible stub with
-`model_name = "databricks-bge-large-en"`, `dimension = 1024`, and
-`backend_name = "databricks_foundation_model"`. The remaining runtime work is
-to implement `encode()`.
+`DatabricksFoundationModelBackend` is implemented against the Databricks SDK
+with `model_name = "databricks-bge-large-en"`, `dimension = 1024`, and
+`backend_name = "databricks_foundation_model"`. It is mock-tested locally; the
+remaining runtime work is an explicitly approved live Databricks validation run.
 
 Implementation requirements:
 
@@ -138,7 +138,7 @@ Implementation requirements:
 - Log MLflow parameters for endpoint/model name, backend, batch size, and
   embedding dimension.
 - Add MLflow metrics for request count, retry count, failed batches, embedded
-  text count, total latency, and mean batch latency.
+  text count, total run duration, and Foundation Model backend latency.
 
 The stored `embedding_model` for Databricks-generated rows should be
 `databricks-bge-large-en` so `ClusteringAgent` and Vector Search can target a

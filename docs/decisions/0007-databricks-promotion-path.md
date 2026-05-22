@@ -86,8 +86,8 @@ Negative:
   replaced or automated later.
 - In Phase 1, Vector Search proves the platform source/index path before it
   replaces all-pairs candidate generation in `ClusteringAgent`.
-- The Databricks Foundation Model backend still needs runtime implementation
-  before this path can execute.
+- The Databricks Foundation Model backend is now implemented and mock-tested,
+  but this path still needs an approved live Databricks validation run.
 
 ## Alternatives considered
 
