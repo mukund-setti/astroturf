@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+import altair as alt
 import pandas as pd
 from deltalake import DeltaTable
 import streamlit as st
@@ -192,6 +193,10 @@ def run_app():
     st.caption(
         "Internal developer tool for visually inspecting ingestion results and table health."
     )
+    st.info(
+        "**Bronze Limitation Note:** Bronze contains regulations.gov list-endpoint metadata only. "
+        "Full submitted comment text and attachment/PDF content are expected to be populated by ParserAgent into silver."
+    )
 
     # Sidebar inputs
     st.sidebar.header("UI Inputs")
@@ -244,6 +249,16 @@ def run_app():
     stats = get_overview_stats(df, active_docket, bronze_path)
 
     st.subheader("Overview Panel")
+
+    # Bronze health status check
+    total_rows = stats["total_rows"]
+    dup_ids = stats["duplicate_comment_id_count"]
+    uniq_ids = stats["unique_comment_id_count"]
+    if total_rows > 0 and dup_ids == 0 and uniq_ids == total_rows:
+        st.success("Bronze health: OK")
+    else:
+        st.warning("Bronze health: Check diagnostics.")
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"**Total Rows:** {stats['total_rows']}")
@@ -372,7 +387,23 @@ def run_app():
         if "last_modified_date" in df_docket.columns:
             daily_df = get_records_per_day(df, active_docket, "last_modified_date")
             if not daily_df.empty:
-                st.bar_chart(data=daily_df.set_index("date"))
+                # Ensure date is converted to string for cleaner categorical display on x-axis
+                daily_df = daily_df.copy()
+                daily_df["date"] = daily_df["date"].astype(str)
+
+                chart = (
+                    alt.Chart(daily_df)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("date:O", title="Date"),
+                        y=alt.Y(
+                            "count:Q",
+                            title="Record Count",
+                            scale=alt.Scale(domainMin=0),
+                        ),
+                    )
+                )
+                st.altair_chart(chart, use_container_width=True)
             else:
                 st.info("No valid records with last_modified_date found.")
         else:
