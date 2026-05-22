@@ -2,6 +2,7 @@
 
 See docs/decisions/0002-deltalake-for-local-bronze.md for the JVM-free rationale.
 """
+
 from __future__ import annotations
 
 import logging

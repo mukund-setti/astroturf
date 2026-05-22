@@ -1,4 +1,5 @@
-﻿"""attribution agent — see docs/architecture.md"""
+"""attribution agent — see docs/architecture.md"""
+
 from dataclasses import dataclass
 from typing import Any
 

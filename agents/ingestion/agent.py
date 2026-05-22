@@ -2,6 +2,7 @@
 
 See docs/architecture.md and docs/decisions/0002-deltalake-for-local-bronze.md.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,6 +48,7 @@ class IngestionInput:
     docket_id: str
     page_size: int = PAGE_SIZE
     max_outer_iterations: int | None = None  # safety cap for tests / dry runs
+    max_comments: int | None = None  # stop ingestion after at least this many comments
 
 
 @dataclass
@@ -62,7 +64,9 @@ class IngestionOutput:
     retry=retry_if_exception_type(_RetryableHTTPError),
     reraise=True,
 )
-def _fetch_page(client: httpx.Client, url: str, params: dict[str, Any]) -> dict[str, Any]:
+def _fetch_page(
+    client: httpx.Client, url: str, params: dict[str, Any]
+) -> dict[str, Any]:
     """GET one page. Raises ``_RetryableHTTPError`` on 429/5xx (tenacity retries)."""
     response = client.get(url, params=params)
     status = response.status_code
@@ -79,7 +83,9 @@ def _parse_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def _to_raw_comment(record: dict[str, Any], docket_id: str, now: datetime) -> RawComment:
+def _to_raw_comment(
+    record: dict[str, Any], docket_id: str, now: datetime
+) -> RawComment:
     attrs = record.get("attributes") or {}
     return RawComment(
         comment_id=record["id"],
@@ -194,10 +200,14 @@ class IngestionAgent:
                     records = page_json.get("data") or []
                     if records:
                         rows = [
-                            _to_raw_comment(r, inputs.docket_id, datetime.now(timezone.utc))
+                            _to_raw_comment(
+                                r, inputs.docket_id, datetime.now(timezone.utc)
+                            )
                             for r in records
                         ]
-                        last_lmd_in_window = _last_lmd_string(records) or last_lmd_in_window
+                        last_lmd_in_window = (
+                            _last_lmd_string(records) or last_lmd_in_window
+                        )
 
                         metrics = merge_comments(self.bronze_path, _rows_to_arrow(rows))
                         comments_written += metrics["inserted"] + metrics["updated"]
@@ -214,8 +224,24 @@ class IngestionAgent:
                             )
                             next_log_threshold += LOG_EVERY
 
+                        if (
+                            inputs.max_comments is not None
+                            and comments_fetched >= inputs.max_comments
+                        ):
+                            break
+
                     if pages_this_window >= MAX_PAGES_PER_REQUEST:
                         break
+
+                if (
+                    inputs.max_comments is not None
+                    and comments_fetched >= inputs.max_comments
+                ):
+                    log.info(
+                        "Reached max_comments=%s; stopping ingestion.",
+                        inputs.max_comments,
+                    )
+                    break
 
                 if pages_this_window < MAX_PAGES_PER_REQUEST:
                     # Window drained — docket fully ingested.

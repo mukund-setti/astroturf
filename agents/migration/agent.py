@@ -1,4 +1,5 @@
-﻿"""migration agent — see docs/architecture.md"""
+"""migration agent — see docs/architecture.md"""
+
 from dataclasses import dataclass
 from typing import Any
 

@@ -6,6 +6,7 @@ The Pydantic ``RawComment`` is the source of truth. Both the active
 are derived from the same field-type table below — a single sync test guards
 against drift.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -68,12 +69,18 @@ _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
 def raw_comment_arrow_schema() -> pa.Schema:
     """pyarrow schema for bronze.raw_comments (used by the delta-rs writer)."""
     return pa.schema(
-        [pa.field(name, arrow_t, nullable=True) for name, (arrow_t, _) in _FIELD_TYPES.items()]
+        [
+            pa.field(name, arrow_t, nullable=True)
+            for name, (arrow_t, _) in _FIELD_TYPES.items()
+        ]
     )
 
 
 def raw_comment_struct() -> T.StructType:
     """PySpark StructType for bronze.raw_comments (used on Databricks)."""
     return T.StructType(
-        [T.StructField(name, spark_t, nullable=True) for name, (_, spark_t) in _FIELD_TYPES.items()]
+        [
+            T.StructField(name, spark_t, nullable=True)
+            for name, (_, spark_t) in _FIELD_TYPES.items()
+        ]
     )

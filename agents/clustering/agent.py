@@ -1,4 +1,5 @@
-﻿"""clustering agent — see docs/architecture.md"""
+"""clustering agent — see docs/architecture.md"""
+
 from dataclasses import dataclass
 from typing import Any
 

@@ -1,4 +1,5 @@
 """Unit tests for IngestionAgent — HTTP layer faked, real delta-rs writes to tmp_path."""
+
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -66,7 +67,9 @@ class _ScriptedResponse:
 class FakeHttpClient:
     """Records calls and dispatches to a responder ``(url, params) -> _ScriptedResponse``."""
 
-    def __init__(self, responder: Callable[[str, dict[str, Any]], _ScriptedResponse]) -> None:
+    def __init__(
+        self, responder: Callable[[str, dict[str, Any]], _ScriptedResponse]
+    ) -> None:
         self._responder = responder
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -114,8 +117,13 @@ def _delta_rows(path: str) -> list[dict[str, Any]]:
 
 def test_pagination_follows_links_next(tmp_path, api_key):
     docket = "EPA-A"
-    page1 = _page([_comment(i, docket, "2024-01-01T00:00:00Z") for i in range(4)], has_next=True)
-    page2 = _page([_comment(i, docket, "2024-01-02T00:00:00Z") for i in range(4, 7)], has_next=False)
+    page1 = _page(
+        [_comment(i, docket, "2024-01-01T00:00:00Z") for i in range(4)], has_next=True
+    )
+    page2 = _page(
+        [_comment(i, docket, "2024-01-02T00:00:00Z") for i in range(4, 7)],
+        has_next=False,
+    )
 
     def responder(url, params):
         assert url == "/comments"
@@ -176,18 +184,20 @@ def test_raises_on_persistent_5xx(tmp_path, api_key):
 
 def test_idempotent_merge(tmp_path, api_key):
     docket = "EPA-IDEM"
-    page = _page([_comment(i, docket, "2024-01-01T00:00:00Z") for i in range(3)], has_next=False)
+    page = _page(
+        [_comment(i, docket, "2024-01-01T00:00:00Z") for i in range(3)], has_next=False
+    )
 
     def responder(url, params):
         return _ScriptedResponse(200, page)
 
     path = str(tmp_path / "raw_comments")
-    IngestionAgent(config={"bronze_path": path}, http_client=FakeHttpClient(responder)).run(
-        IngestionInput(docket_id=docket)
-    )
-    IngestionAgent(config={"bronze_path": path}, http_client=FakeHttpClient(responder)).run(
-        IngestionInput(docket_id=docket)
-    )
+    IngestionAgent(
+        config={"bronze_path": path}, http_client=FakeHttpClient(responder)
+    ).run(IngestionInput(docket_id=docket))
+    IngestionAgent(
+        config={"bronze_path": path}, http_client=FakeHttpClient(responder)
+    ).run(IngestionInput(docket_id=docket))
 
     rows = _delta_rows(path)
     assert len(rows) == 3
@@ -272,3 +282,26 @@ def test_cursor_stalled_raises_with_actionable_message(tmp_path, api_key):
     assert stuck_lmd in msg
     assert "5000" in msg  # records seen so far
     assert "documentId" in msg or "narrow" in msg  # resolution hint
+
+
+def test_max_comments_limit(tmp_path, api_key):
+    docket = "EPA-LIMIT"
+    page1 = _page(
+        [_comment(i, docket, "2024-01-01T00:00:00Z") for i in range(4)], has_next=True
+    )
+    page2 = _page(
+        [_comment(i, docket, "2024-01-02T00:00:00Z") for i in range(4, 8)],
+        has_next=False,
+    )
+
+    def responder(url, params):
+        return _ScriptedResponse(200, page1 if params["page[number]"] == 1 else page2)
+
+    client = FakeHttpClient(responder)
+    agent = IngestionAgent(
+        config={"bronze_path": str(tmp_path / "raw_comments")}, http_client=client
+    )
+    out = agent.run(IngestionInput(docket_id=docket, max_comments=5))
+
+    assert out.metadata["comments_fetched"] == 8
+    assert out.rows_written == 8

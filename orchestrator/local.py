@@ -1,4 +1,5 @@
-﻿"""Local orchestrator for dev runs. Production uses Databricks Workflows."""
+"""Local orchestrator for dev runs. Production uses Databricks Workflows."""
+
 import argparse
 import logging
 

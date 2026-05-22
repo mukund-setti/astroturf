@@ -1,4 +1,5 @@
 """Sync check: arrow and Spark schemas stay aligned with the Pydantic source of truth."""
+
 from __future__ import annotations
 
 from shared.schemas.comments import (

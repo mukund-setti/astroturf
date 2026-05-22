@@ -1,4 +1,5 @@
-﻿"""parser agent — see docs/architecture.md"""
+"""parser agent — see docs/architecture.md"""
+
 from dataclasses import dataclass
 from typing import Any
 
