@@ -40,3 +40,15 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "ruff>=0.15.14",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+builtins = ["spark", "dbutils", "display"]
+
+[tool.ruff.lint]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/databricks/*" = ["E402"]
+
+
