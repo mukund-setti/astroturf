@@ -6,6 +6,9 @@ import os
 import sys
 import time
 
+# Allow importing absolute paths from root directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from agents.ingestion.agent import IngestionAgent, IngestionInput
 
 
