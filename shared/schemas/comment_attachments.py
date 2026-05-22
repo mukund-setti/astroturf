@@ -31,6 +31,11 @@ class CommentAttachment(BaseModel):
     detected_at: datetime
     download_status: str = "pending"
     extracted_text_path: str | None = None
+    local_path: str | None = None
+    checksum_sha256: str | None = None
+    downloaded_at: datetime | None = None
+    download_error: str | None = None
+    size_bytes_actual: int | None = None
 
 
 # (arrow_type, spark_type) per field. Field order here drives both derived schemas.
@@ -45,6 +50,11 @@ _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
     "detected_at": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
     "download_status": (pa.string(), T.StringType()),
     "extracted_text_path": (pa.string(), T.StringType()),
+    "local_path": (pa.string(), T.StringType()),
+    "checksum_sha256": (pa.string(), T.StringType()),
+    "downloaded_at": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
+    "download_error": (pa.string(), T.StringType()),
+    "size_bytes_actual": (pa.int64(), T.LongType()),
 }
 
 

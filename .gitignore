@@ -17,3 +17,6 @@ metastore_db/
 derby.log
 data/
 mlflow.db
+
+# Local review scratch files (Claude conversations, etc.)
+_review_*.txt

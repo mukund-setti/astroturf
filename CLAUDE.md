@@ -36,6 +36,7 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - Adding a new dependency (tell me what and why)
 - Changing an agent's public contract (Input/Output dataclasses)
 - Creating a new Delta table or schema
+- Touching Delta table schemas (adding/removing/renaming fields, or changing types) on existing tables. See ADR-0004.
 - Any change to the medallion table layout in docs/architecture.md
 
 ## Things to just do
@@ -46,4 +47,4 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - Add logging where it would help debugging
 
 ## Current status
-IngestionAgent implemented end-to-end against regulations.gov v4 (date-window cursoring past the 5000-record cap; tenacity retries; MLflow metrics; idempotent MERGE). Local bronze writes via delta-rs — see docs/decisions/0002-deltalake-for-local-bronze.md. Next task: ParserAgent (bronze -> silver, with LLM extraction for PDF/scanned attachments).
+AttachmentDownloaderAgent (ParserAgent v2B phase 1 of 4) complete. Phase 1 downloads attachment binaries to disk, computes checksums, and updates silver.comment_attachments with download metadata. Phases 2-4 are NOT done: phase 2 (text extraction from downloaded PDFs via pypdf/pdfplumber), phase 3 (reconciliation back into parsed_comments per a yet-to-be-written ADR), phase 4 (OCR fallback, position deferred). 8 unit tests passing. ADR-0004 documents the implicit schema-evolution policy currently inline in the downloader, with a planned refactor to shared/delta_utils/silver.py before a second adopter.

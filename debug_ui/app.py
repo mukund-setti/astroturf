@@ -511,7 +511,56 @@ def run_app():
             st.success(
                 f"Discovered **{len(df_attachments_docket)}** attachment files for docket `{active_docket}`."
             )
-            st.dataframe(df_attachments_docket, use_container_width=True)
+            
+            # Extract statuses safely to support schema variations and avoid drift crashes
+            status_col = "download_status" if "download_status" in df_attachments_docket.columns else None
+            
+            pending_count = 0
+            downloaded_count = 0
+            skipped_count = 0
+            failed_count = 0
+            total_size_bytes = 0.0
+            
+            if status_col:
+                pending_count = int((df_attachments_docket[status_col] == "pending").sum())
+                downloaded_count = int((df_attachments_docket[status_col] == "downloaded").sum())
+                skipped_count = int((df_attachments_docket[status_col] == "skipped").sum())
+                failed_count = int((df_attachments_docket[status_col] == "failed").sum())
+            else:
+                pending_count = len(df_attachments_docket)
+                
+            if "size_bytes_actual" in df_attachments_docket.columns:
+                total_size_bytes = df_attachments_docket["size_bytes_actual"].dropna().sum()
+                
+            total_size_mb = round(total_size_bytes / (1024 * 1024), 2)
+            
+            # Render visual telemetry metrics
+            st.write("##### Telemetry & Download Metrics")
+            m1, m2, m3, m4, m5 = st.columns(5)
+            with m1:
+                st.metric("Pending Downloads", pending_count)
+            with m2:
+                st.metric("Downloaded Files", downloaded_count)
+            with m3:
+                st.metric("Skipped Files", skipped_count)
+            with m4:
+                st.metric("Failed Downloads", failed_count)
+            with m5:
+                st.metric("Total Downloaded Size", f"{total_size_mb} MB")
+                
+            st.write("##### Cataloged Attachments Registry")
+            table_cols = ["attachment_id", "comment_id", "file_name", "format", "size_bytes"]
+            if status_col:
+                table_cols.append("download_status")
+            if "local_path" in df_attachments_docket.columns:
+                table_cols.append("local_path")
+            if "download_error" in df_attachments_docket.columns:
+                table_cols.append("download_error")
+            if "checksum_sha256" in df_attachments_docket.columns:
+                table_cols.append("checksum_sha256")
+                
+            table_cols = [c for c in table_cols if c in df_attachments_docket.columns]
+            st.dataframe(df_attachments_docket[table_cols], use_container_width=True)
         else:
             st.info(
                 "No attachments cataloged for this docket yet. Run ParserAgent v2A to catalog comments."
