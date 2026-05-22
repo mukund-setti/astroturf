@@ -306,7 +306,10 @@ class IngestionAgent:
             params = {**base_params, "page[number]": page_number}
             page = _fetch_page(self._http, "/comments", params)
             yield page
-            has_next = bool((page.get("links") or {}).get("next"))
+            meta = page.get("meta") or {}
+            has_next = meta.get("hasNextPage", False) or bool(
+                (page.get("links") or {}).get("next")
+            )
             if not has_next:
                 return
             page_number += 1
