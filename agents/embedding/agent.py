@@ -328,6 +328,18 @@ class EmbeddingAgent:
     def run(self, inputs: EmbeddingInput) -> EmbeddingOutput:
         start_time = time.monotonic()
 
+        # Databricks BGE backend safety: default batch size 32 is prone to hangs on the server serving endpoint.
+        # Force a safe default of 16 if the backend is Databricks and the batch size is the system-wide default.
+        if (
+            self.backend.backend_name == "databricks_foundation_model"
+            and inputs.batch_size == DEFAULT_BATCH_SIZE
+        ):
+            log.info(
+                "Databricks backend detected with default batch size %d. Adjusting to 16 for safety.",
+                inputs.batch_size,
+            )
+            inputs.batch_size = 16
+
         log.info(
             "Starting EmbeddingAgent for docket=%s, parsed=%s, embeddings=%s, model=%s",
             inputs.docket_id,

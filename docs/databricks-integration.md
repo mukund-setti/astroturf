@@ -123,8 +123,7 @@ Implementation requirements:
 - Use the Databricks Foundation Model endpoint `databricks-bge-large-en`.
 - Preserve the `EmbeddingBackend.encode(texts: list[str]) -> list[list[float]]`
   contract.
-- Batch requests using `EmbeddingInput.batch_size`; start with 16 or 32 rows
-  per batch.
+- Batch requests using `EmbeddingInput.batch_size`; use a batch size of 16 (since larger sizes like 32 can hang on the serving endpoint).
 - Send request payloads shaped around a list of input strings.
 - Normalize the endpoint response into one float vector per input string.
 - Validate that the response count equals the input count.

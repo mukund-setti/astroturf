@@ -385,6 +385,44 @@ def test_databricks_backend_defaults() -> None:
     assert backend.backend_name == "databricks_foundation_model"
 
 
+def test_databricks_backend_safe_batch_size_default(tmp_path: Path) -> None:
+    """EmbeddingAgent with Databricks backend defaults to batch_size=16 unless overridden."""
+    parsed_path = tmp_path / "parsed"
+    embeddings_path = tmp_path / "embeddings"
+
+    # Seed parsed comments so agent doesn't raise error or short-circuit before batch loop
+    _seed_parsed(
+        parsed_path,
+        [
+            _make_parsed(comment_id="c-1", normalized_text_hash="h-1"),
+        ],
+    )
+
+    client = _FakeDatabricksClient([{"data": [{"embedding": [1.0, 0.0]}]}])
+    backend = DatabricksFoundationModelBackend(dimension=2, client=client)
+    agent = EmbeddingAgent(backend=backend)
+
+    # 1. Default batch size (32) should adjust to 16
+    inputs_default = EmbeddingInput(
+        docket_id="DOCKET-EMB",
+        parsed_path=str(parsed_path),
+        embeddings_path=str(embeddings_path),
+    )
+    assert inputs_default.batch_size == 32  # Global default
+    agent.run(inputs_default)
+    assert inputs_default.batch_size == 16  # Adjusted to 16
+
+    # 2. Explicitly overridden batch size (e.g. 8) should remain unchanged
+    inputs_explicit = EmbeddingInput(
+        docket_id="DOCKET-EMB",
+        parsed_path=str(parsed_path),
+        embeddings_path=str(embeddings_path),
+        batch_size=8,
+    )
+    agent.run(inputs_explicit)
+    assert inputs_explicit.batch_size == 8  # Retained
+
+
 def test_databricks_backend_request_payload_and_response_parsing() -> None:
     client = _FakeDatabricksClient(
         [

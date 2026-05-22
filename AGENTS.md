@@ -66,8 +66,8 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - EPA-HQ-OAR-2021-0317 exact-hash baseline smoke test passed: 396 candidate `detail_comment_text` rows, 7 duplicate-hash clusters, 16 memberships, largest cluster size 4.
 - Debug UI expanded to include exact-hash baseline, cluster campaign style classification, and comprehensive cluster evidence inspection.
 - Evidence export CLI added: `scripts/export_cluster_evidence.py` writes bounded Markdown cluster-review reports from existing gold/silver Delta tables; EPA-HQ-OAR-2021-0317 report generated under `data/exports/`.
-- Latest test status: 91 unit tests passing, Ruff clean, Ruff format clean.
+- Latest test status: 92 unit tests passing, Ruff clean, Ruff format clean.
 
 ### Next priorities
-1. Run the Databricks Foundation Model backend on a Databricks-flavored path once live workspace access is explicitly approved.
+1. Run the Databricks Foundation Model backend on a Databricks-flavored path once live workspace access is explicitly approved (batch safety default of 16 successfully integrated).
 2. Later: attachment text extraction (ParserAgent v2B phases 2-4) and Databricks Vector Search integration.
