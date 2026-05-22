@@ -722,8 +722,8 @@ def run_app():
                 "No attachments cataloged for this docket yet. Run ParserAgent v2A to catalog comments."
             )
 
-    # Duplicate text inspection
-    st.subheader("Duplicate Text Inspection")
+    # Bronze duplicate text inspection
+    st.subheader("Bronze Duplicate Text Inspection")
     candidate_text_cols = ["comment_text", "text", "body", "raw_text", "parsed_text"]
     text_col_to_use = None
     for col in candidate_text_cols:
@@ -744,11 +744,15 @@ def run_app():
                 st.success("No duplicate normalized comments found for this docket ID.")
         else:
             st.warning(
-                "Raw comment body not available in bronze; ParserAgent will populate silver parsed text."
+                "Bronze list-endpoint records do not contain raw comment bodies for this docket. "
+                "Use the Silver Parsed Comments and Gold Comment Clusters panels below for parsed "
+                "text, exact-hash baselines, and semantic cluster evidence."
             )
     else:
         st.warning(
-            "Raw comment body not available in bronze; ParserAgent will populate silver parsed text."
+            "Bronze list-endpoint records do not contain raw comment bodies for this docket. "
+            "Use the Silver Parsed Comments and Gold Comment Clusters panels below for parsed "
+            "text, exact-hash baselines, and semantic cluster evidence."
         )
 
     # Silver Parsed Comments Section
