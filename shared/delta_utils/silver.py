@@ -14,12 +14,12 @@ from deltalake import DeltaTable, write_deltalake
 log = logging.getLogger(__name__)
 
 
-def merge_parsed_comments(
+def _merge_with_predicate(
     path: str | Path,
     arrow_table: pa.Table,
-    key: str = "comment_id",
+    predicate: str,
 ) -> dict[str, int]:
-    """Idempotent upsert of ``arrow_table`` into the Delta table at ``path``.
+    """Idempotent upsert of ``arrow_table`` using a raw SQL merge ``predicate``.
 
     Initialises an empty Delta table with ``arrow_table.schema`` on first call so
     the merge always has a target. Returns the row-count operation metrics from
@@ -36,7 +36,7 @@ def merge_parsed_comments(
     metrics = (
         dt.merge(
             source=arrow_table,
-            predicate=f"target.{key} = source.{key}",
+            predicate=predicate,
             source_alias="source",
             target_alias="target",
         )
@@ -48,6 +48,15 @@ def merge_parsed_comments(
         "inserted": int(metrics.get("num_target_rows_inserted", 0)),
         "updated": int(metrics.get("num_target_rows_updated", 0)),
     }
+
+
+def merge_parsed_comments(
+    path: str | Path,
+    arrow_table: pa.Table,
+    key: str = "comment_id",
+) -> dict[str, int]:
+    """Idempotent upsert into a Delta table keyed by a single column ``key``."""
+    return _merge_with_predicate(path, arrow_table, f"target.{key} = source.{key}")
 
 
 def merge_comment_details(
@@ -64,6 +73,23 @@ def merge_comment_attachments(
 ) -> dict[str, int]:
     """Idempotent upsert of attachment rows into silver.comment_attachments."""
     return merge_parsed_comments(path, arrow_table, key="attachment_id")
+
+
+def merge_comment_embeddings(
+    path: str | Path,
+    arrow_table: pa.Table,
+) -> dict[str, int]:
+    """Idempotent upsert into silver.comment_embeddings on compound PK.
+
+    Per ADR-0005 the primary key is ``(comment_id, embedding_model)`` so a single
+    comment can hold one row per model without collision.
+    """
+    return _merge_with_predicate(
+        path,
+        arrow_table,
+        "target.comment_id = source.comment_id "
+        "AND target.embedding_model = source.embedding_model",
+    )
 
 
 def ensure_schema(
@@ -112,13 +138,17 @@ def ensure_schema(
             )
 
     # Find missing fields on disk that are declared in the expected schema
-    missing_fields = [field for name, field in expected_fields.items() if name not in on_disk_fields]
+    missing_fields = [
+        field for name, field in expected_fields.items() if name not in on_disk_fields
+    ]
     if not missing_fields:
         # Schemas match perfectly, no migration needed
         return
 
     # All missing fields must be nullable
-    non_nullable_missing = [field.name for field in missing_fields if not field.nullable]
+    non_nullable_missing = [
+        field.name for field in missing_fields if not field.nullable
+    ]
     if non_nullable_missing:
         raise ValueError(
             f"Schema migration rejected: new fields {non_nullable_missing} are non-nullable. "
@@ -165,4 +195,3 @@ def ensure_schema(
         schema_mode="overwrite",
     )
     log.info("Schema migration successful for table: %s", table_path_str)
-

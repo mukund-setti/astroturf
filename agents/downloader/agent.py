@@ -123,15 +123,19 @@ class AttachmentDownloaderAgent:
         )
 
         if not os.path.exists(table_path) or not DeltaTable.is_deltatable(table_path):
-            log.warning("No attachments table found at %s. Nothing to download.", table_path)
+            log.warning(
+                "No attachments table found at %s. Nothing to download.", table_path
+            )
             return DownloaderOutput(inputs.docket_id, 0, 0, 0, 0)
 
         # 1. Load attachments Delta table
         dt = DeltaTable(table_path)
-        
+
         # Ensure schema evolution to migrate existing tables with old schemas safely
-        ensure_schema(table_path, comment_attachment_arrow_schema(), allow_destructive=True)
-        
+        ensure_schema(
+            table_path, comment_attachment_arrow_schema(), allow_destructive=True
+        )
+
         # Reload dt to reflect any schema modifications
         dt = DeltaTable(table_path)
 
@@ -139,6 +143,7 @@ class AttachmentDownloaderAgent:
 
         # Filter by docket_id
         import pyarrow.compute as pc
+
         arrow_table = arrow_table.filter(pc.field("docket_id") == inputs.docket_id)
 
         # Filter by statuses
@@ -175,9 +180,13 @@ class AttachmentDownloaderAgent:
             log.info("Processing attachment: %s (format: %s)", attachment_id, fmt)
 
             # Ensure safe names (directory traversal mitigation)
-            safe_docket_id = "".join(c for c in inputs.docket_id if c.isalnum() or c in "-_")
+            safe_docket_id = "".join(
+                c for c in inputs.docket_id if c.isalnum() or c in "-_"
+            )
             safe_comment_id = "".join(c for c in comment_id if c.isalnum() or c in "-_")
-            safe_attachment_id = "".join(c for c in attachment_id if c.isalnum() or c in "-_")
+            safe_attachment_id = "".join(
+                c for c in attachment_id if c.isalnum() or c in "-_"
+            )
 
             dest_dir = Path(inputs.attachments_path) / safe_docket_id / safe_comment_id
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -200,14 +209,18 @@ class AttachmentDownloaderAgent:
             if not file_url:
                 log.error("Missing file_url for attachment_id=%s", attachment_id)
                 record["download_status"] = "failed"
-                record["download_error"] = "Missing file_url in cataloged attachment record"
+                record["download_error"] = (
+                    "Missing file_url in cataloged attachment record"
+                )
                 failed_count += 1
                 updated_rows.append(_record_to_model(record, now))
                 continue
 
             # Check for existing local file cache
             if final_path.exists() and not inputs.force_download:
-                log.info("File already exists on disk at %s. Skipping download.", final_path)
+                log.info(
+                    "File already exists on disk at %s. Skipping download.", final_path
+                )
                 try:
                     checksum = _compute_sha256(final_path)
                     actual_size = final_path.stat().st_size
@@ -298,7 +311,11 @@ class AttachmentDownloaderAgent:
 
                     downloaded_count += 1
                     total_bytes_downloaded += bytes_written
-                    log.info("Downloaded %s successfully (%d bytes)", attachment_id, bytes_written)
+                    log.info(
+                        "Downloaded %s successfully (%d bytes)",
+                        attachment_id,
+                        bytes_written,
+                    )
 
             except Exception as e:
                 log.exception("Exception downloading attachment_id=%s", attachment_id)

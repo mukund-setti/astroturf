@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -112,12 +111,16 @@ def test_download_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert output.total_bytes_downloaded == 19
 
     # Verify target file exists and has correct content
-    expected_file_path = attachments_path / "DOCKET-1" / "comment_1" / "attach_1_pdf.pdf"
+    expected_file_path = (
+        attachments_path / "DOCKET-1" / "comment_1" / "attach_1_pdf.pdf"
+    )
     assert expected_file_path.exists()
     assert expected_file_path.read_bytes() == b"Hello, Antigravity!"
 
     # Verify temporary file was deleted/renamed
-    assert not (attachments_path / "DOCKET-1" / "comment_1" / "attach_1_pdf.pdf.part").exists()
+    assert not (
+        attachments_path / "DOCKET-1" / "comment_1" / "attach_1_pdf.pdf.part"
+    ).exists()
 
     # Read back DeltaTable rows
     dt = DeltaTable(str(table_path))
@@ -132,7 +135,9 @@ def test_download_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert r["downloaded_at"] is not None
 
 
-def test_max_downloads_safety_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_max_downloads_safety_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verifies that max_downloads cap stops execution and leaves remaining rows pending."""
     table_path = tmp_path / "silver" / "comment_attachments"
     attachments_path = tmp_path / "data" / "attachments"
@@ -186,7 +191,9 @@ def test_max_downloads_safety_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert statuses.count("pending") == 1
 
 
-def test_max_file_mb_skips_oversized_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_max_file_mb_skips_oversized_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verifies that oversized files are skipped, both via Content-Length and progressive streaming counts."""
     table_path = tmp_path / "silver" / "comment_attachments"
     attachments_path = tmp_path / "data" / "attachments"
@@ -231,7 +238,9 @@ def test_max_file_mb_skips_oversized_files(tmp_path: Path, monkeypatch: pytest.M
     mock_response_stream = MagicMock()
     mock_response_stream.status_code = 200
     mock_response_stream.headers = {}
-    mock_response_stream.iter_bytes.return_value = [b"A" * 1024 * 1024] * 3  # 3 MB total
+    mock_response_stream.iter_bytes.return_value = [
+        b"A" * 1024 * 1024
+    ] * 3  # 3 MB total
 
     # Use a URL-dependent stream context side-effect to avoid ordering issues
     def dynamic_stream(method: str, url: str, **kwargs: Any) -> MagicMock:
@@ -263,10 +272,12 @@ def test_max_file_mb_skips_oversized_files(tmp_path: Path, monkeypatch: pytest.M
 
     # Read back Delta table rows
     records = DeltaTable(str(table_path)).to_pyarrow_table().to_pylist()
-    
+
     # Assert by finding the exact records by attachment_id
     cl_record = next(r for r in records if r["attachment_id"] == "attach_cl_pdf")
-    stream_record = next(r for r in records if r["attachment_id"] == "attach_stream_pdf")
+    stream_record = next(
+        r for r in records if r["attachment_id"] == "attach_stream_pdf"
+    )
 
     # Content-Length check skips cleanly
     assert cl_record["download_status"] == "skipped"
@@ -277,7 +288,9 @@ def test_max_file_mb_skips_oversized_files(tmp_path: Path, monkeypatch: pytest.M
     assert "limit of 2 MB" in stream_record["download_error"]
 
     # Verify no files remain on disk (cleanup worked)
-    part_file = attachments_path / "DOCKET-1" / "comment_2" / "attach_stream_pdf.pdf.part"
+    part_file = (
+        attachments_path / "DOCKET-1" / "comment_2" / "attach_stream_pdf.pdf.part"
+    )
     final_file = attachments_path / "DOCKET-1" / "comment_2" / "attach_stream_pdf.pdf"
     assert not part_file.exists()
     assert not final_file.exists()
@@ -304,7 +317,9 @@ def test_unsupported_extension_skipped(tmp_path: Path) -> None:
 
     # Mock client that raises an exception if stream() is called (to verify no network requests are made)
     mock_client = MagicMock(spec=httpx.Client)
-    mock_client.stream.side_effect = AssertionError("Should not make network requests for unsupported formats")
+    mock_client.stream.side_effect = AssertionError(
+        "Should not make network requests for unsupported formats"
+    )
 
     agent = AttachmentDownloaderAgent(http_client=mock_client)
     inputs = DownloaderInput(
@@ -393,7 +408,7 @@ def test_failed_http_marks_failed_without_crashing(tmp_path: Path) -> None:
     assert output.skipped_count == 0
 
     records = DeltaTable(str(table_path)).to_pyarrow_table().to_pylist()
-    
+
     # Assert by finding the exact records by attachment_id
     r_404 = next(r for r in records if r["attachment_id"] == "attach_404_pdf")
     r_ok = next(r for r in records if r["attachment_id"] == "attach_ok_pdf")
@@ -438,7 +453,9 @@ def test_existing_downloaded_file_skipped_unless_forced(tmp_path: Path) -> None:
 
     # Mock client to verify no network call is made by default
     mock_client = MagicMock(spec=httpx.Client)
-    mock_client.stream.side_effect = AssertionError("Should not make network requests if cache file is present!")
+    mock_client.stream.side_effect = AssertionError(
+        "Should not make network requests if cache file is present!"
+    )
 
     # 1. Run without force_download
     agent = AttachmentDownloaderAgent(http_client=mock_client)
@@ -469,7 +486,7 @@ def test_existing_downloaded_file_skipped_unless_forced(tmp_path: Path) -> None:
     mock_response.status_code = 200
     mock_response.headers = {"content-length": "12"}
     mock_response.iter_bytes.return_value = [b"new content!"]
-    
+
     mock_client_force = MagicMock(spec=httpx.Client)
     mock_client_force.stream.return_value.__enter__.return_value = mock_response
 
@@ -486,7 +503,7 @@ def test_existing_downloaded_file_skipped_unless_forced(tmp_path: Path) -> None:
 
     # Check that disk contents are overwritten with the new downloaded content
     assert final_file.read_bytes() == b"new content!"
-    
+
     records = DeltaTable(str(table_path)).to_pyarrow_table().to_pylist()
     assert records[0]["download_status"] == "downloaded"
     assert records[0]["size_bytes_actual"] == 12

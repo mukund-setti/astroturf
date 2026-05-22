@@ -103,6 +103,7 @@ def main():
         headers["X-Api-Key"] = api_key
 
     import httpx
+
     http_client = httpx.Client(
         headers=headers,
         timeout=30.0,
@@ -135,7 +136,9 @@ def main():
     print(f"Files Skipped:        {output.skipped_count}")
     print(f"Files Failed:         {output.failed_count}")
     print(f"Total Bytes Saved:    {output.total_bytes_downloaded}")
-    print(f"Total Saved Size:     {output.total_bytes_downloaded / (1024 * 1024):.2f} MB")
+    print(
+        f"Total Saved Size:     {output.total_bytes_downloaded / (1024 * 1024):.2f} MB"
+    )
     print("=" * 50)
 
 
