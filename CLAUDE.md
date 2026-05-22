@@ -1,4 +1,4 @@
-﻿# Astroturf — Claude Code instructions
+# Astroturf — Claude Code instructions
 
 ## What this project is
 A multi-agent system that detects coordinated public comment campaigns in federal rulemaking and traces their language into final rules. Built on Databricks. The "agentic" parts are AttributionAgent (tool-using research), ParserAgent (LLM-based PDF extraction with judgment), and the Orchestrator (routing decisions). The rest are Spark transforms wearing an agent costume — keep that distinction honest.
@@ -22,6 +22,9 @@ Agents communicate via Delta tables, not in-memory message passing. Each agent i
 5. Every agent run emits an MLflow run with inputs (docket_id, config), outputs (row counts, quality metrics), and timing.
 6. The Orchestrator never embeds business logic. It sequences agents and handles failures. If you're tempted to put logic in the orchestrator, it belongs in an agent.
 
+## Architecture decisions
+Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR covers one decision with Context / Decision / Consequences / Alternatives. Write a new one whenever we make a non-obvious or non-trivially-reversible call.
+
 ## Codebase conventions
 - Python 3.11, type hints required on all public functions
 - Ruff for linting/formatting (config in pyproject.toml)
@@ -43,4 +46,4 @@ Agents communicate via Delta tables, not in-memory message passing. Each agent i
 - Add logging where it would help debugging
 
 ## Current status
-Scaffolding complete. No agent is implemented yet. Next task: IngestionAgent end-to-end against regulations.gov v4 API.
+IngestionAgent implemented end-to-end against regulations.gov v4 (date-window cursoring past the 5000-record cap; tenacity retries; MLflow metrics; idempotent MERGE). Local bronze writes via delta-rs — see docs/decisions/0002-deltalake-for-local-bronze.md. Next task: ParserAgent (bronze -> silver, with LLM extraction for PDF/scanned attachments).
