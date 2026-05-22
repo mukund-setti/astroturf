@@ -62,7 +62,7 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - Local real-embedding smoke test passed on the CFPB sample: 11 substantive candidates re-embedded with `BAAI/bge-large-en-v1.5` via the local `sentence-transformers` backend; `silver.comment_embeddings` now has 11 real local vectors and no remaining mock vectors for that sample.
 - ClusteringAgent v1 complete for local single-docket / single-model runs: pairwise cosine over non-mock embeddings by default, connected components above threshold, scoped replacement into `gold.comment_clusters` and `gold.comment_cluster_memberships`, MLflow metrics, and ADR-0006 covering cluster identity / gold layout.
 - CFPB real-embedding clustering smoke test passed at threshold 0.92: 11 candidates, 55 pairs, 1 edge, 1 cluster, 2 memberships.
-- Debug UI exists for bronze / silver / details / attachments inspection.
+- Debug UI exists for bronze / silver / details / attachments / embeddings / gold cluster inspection.
 - Latest test status: 68 unit tests passing, Ruff clean, Ruff format clean.
 
 ### Next priorities

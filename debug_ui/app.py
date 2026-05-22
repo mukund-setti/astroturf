@@ -184,6 +184,68 @@ def get_records_per_day(
     return res_df
 
 
+def filter_by_docket(df: pd.DataFrame | None, docket_id: str | None) -> pd.DataFrame:
+    """Returns rows for a docket when a docket_id column is available."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    if docket_id and "docket_id" in df.columns:
+        return df[df["docket_id"] == docket_id]
+    return df
+
+
+def value_counts_df(df: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Returns a two-column count table for a column, or an empty frame."""
+    if df.empty or column not in df.columns:
+        return pd.DataFrame(columns=[column, "count"])
+    counts = df[column].dropna().astype(str).value_counts().reset_index()
+    counts.columns = [column, "count"]
+    return counts
+
+
+def unique_values(df: pd.DataFrame, column: str) -> list:
+    """Returns sorted non-null unique values for a column."""
+    if df.empty or column not in df.columns:
+        return []
+    return sorted(df[column].dropna().unique().tolist())
+
+
+def available_columns(df: pd.DataFrame, columns: list[str]) -> list[str]:
+    """Returns the requested columns that are present in the DataFrame."""
+    if df.empty:
+        return []
+    return [col for col in columns if col in df.columns]
+
+
+def add_text_preview(
+    members_df: pd.DataFrame, parsed_df: pd.DataFrame | None
+) -> pd.DataFrame:
+    """Adds a best-effort parsed text preview to cluster membership rows."""
+    if members_df.empty or parsed_df is None or parsed_df.empty:
+        return members_df
+    if "comment_id" not in members_df.columns or "comment_id" not in parsed_df.columns:
+        return members_df
+
+    text_cols = [
+        col for col in ["raw_text", "normalized_text"] if col in parsed_df.columns
+    ]
+    if not text_cols:
+        return members_df
+
+    parsed_preview = parsed_df[["comment_id", *text_cols]].copy()
+    parsed_preview["text_preview"] = ""
+    for col in text_cols:
+        parsed_preview["text_preview"] = parsed_preview["text_preview"].mask(
+            parsed_preview["text_preview"].astype(str).str.strip() == "",
+            parsed_preview[col],
+        )
+    parsed_preview["text_preview"] = (
+        parsed_preview["text_preview"].fillna("").astype(str).str.slice(0, 300)
+    )
+    return members_df.merge(
+        parsed_preview[["comment_id", "text_preview"]], on="comment_id", how="left"
+    )
+
+
 # Streamlit UI
 
 
@@ -213,6 +275,16 @@ def run_app():
     attachments_path = st.sidebar.text_input(
         "Attachments Table Path", value="./data/silver/comment_attachments"
     )
+    embeddings_path = st.sidebar.text_input(
+        "Embeddings Table Path", value="./data/silver/comment_embeddings"
+    )
+    clusters_path = st.sidebar.text_input(
+        "Clusters Table Path", value="./data/gold/comment_clusters"
+    )
+    memberships_path = st.sidebar.text_input(
+        "Cluster Memberships Table Path",
+        value="./data/gold/comment_cluster_memberships",
+    )
     row_limit = st.sidebar.selectbox("Row Limit", options=[25, 100, 500, 1000], index=0)
 
     df = load_delta_table(bronze_path)
@@ -229,9 +301,13 @@ def run_app():
         )
         return
 
-    # Load detail and attachments tables globally for docket mapping
+    # Load silver/gold tables globally for docket mapping and downstream panels
+    df_silver = load_delta_table(silver_path)
     df_details = load_delta_table(details_path)
     df_attachments = load_delta_table(attachments_path)
+    df_embeddings = load_delta_table(embeddings_path)
+    df_clusters = load_delta_table(clusters_path)
+    df_memberships = load_delta_table(memberships_path)
 
     # Extract available dockets
     dockets = get_dockets(df)
@@ -271,6 +347,11 @@ def run_app():
             df_attachments_docket = df_attachments[
                 df_attachments["docket_id"] == active_docket
             ]
+
+    df_silver_docket = filter_by_docket(df_silver, active_docket)
+    df_embeddings_docket = filter_by_docket(df_embeddings, active_docket)
+    df_clusters_docket = filter_by_docket(df_clusters, active_docket)
+    df_memberships_docket = filter_by_docket(df_memberships, active_docket)
 
     # Overview panel
     stats = get_overview_stats(df, active_docket, bronze_path)
@@ -619,12 +700,7 @@ def run_app():
     st.markdown("---")
     st.subheader("Silver Parsed Comments Panel")
 
-    df_silver = load_delta_table(silver_path)
     if df_silver is not None and not df_silver.empty:
-        df_silver_docket = df_silver
-        if "docket_id" in df_silver.columns:
-            df_silver_docket = df_silver[df_silver["docket_id"] == active_docket]
-
         if not df_silver_docket.empty:
             total_silver = len(df_silver_docket)
             st.markdown(
@@ -738,6 +814,235 @@ def run_app():
             )
     else:
         st.info("“Silver table not found yet. Run ParserAgent.”")
+
+    # Silver Embeddings Section
+    st.markdown("---")
+    st.subheader("Silver Comment Embeddings Panel")
+
+    if df_embeddings is None:
+        st.info("Embeddings table not found yet. Run EmbeddingAgent.")
+    elif df_embeddings_docket.empty:
+        st.warning(
+            f"Embeddings table loaded, but no embeddings found for docket `{active_docket}`."
+        )
+    else:
+        st.markdown(
+            f"Found embeddings table at `{embeddings_path}` with "
+            f"**{len(df_embeddings_docket)}** rows for docket `{active_docket}`."
+        )
+
+        e1, e2, e3 = st.columns(3)
+        with e1:
+            st.metric("Total Embedding Rows", len(df_embeddings_docket))
+        with e2:
+            dims = unique_values(df_embeddings_docket, "embedding_dim")
+            st.metric("Embedding Dim Values", ", ".join(map(str, dims)) or "N/A")
+        with e3:
+            if "embedded_at" in df_embeddings_docket.columns:
+                embedded_at = pd.to_datetime(
+                    df_embeddings_docket["embedded_at"], errors="coerce"
+                ).dropna()
+                if not embedded_at.empty:
+                    st.metric(
+                        "Embedded At Range",
+                        f"{embedded_at.min()} -> {embedded_at.max()}",
+                    )
+                else:
+                    st.metric("Embedded At Range", "N/A")
+            else:
+                st.metric("Embedded At Range", "N/A")
+
+        if (
+            "backend" in df_embeddings_docket.columns
+            and (df_embeddings_docket["backend"].astype(str) == "mock").any()
+        ):
+            st.warning(
+                "This docket includes mock embeddings; clustering is not semantic."
+            )
+
+        e_tab1, e_tab2, e_tab3 = st.columns(3)
+        with e_tab1:
+            st.write("#### Count by embedding_model")
+            st.dataframe(
+                value_counts_df(df_embeddings_docket, "embedding_model"),
+                use_container_width=True,
+            )
+        with e_tab2:
+            st.write("#### Count by backend")
+            st.dataframe(
+                value_counts_df(df_embeddings_docket, "backend"),
+                use_container_width=True,
+            )
+        with e_tab3:
+            st.write("#### Count by text_source")
+            st.dataframe(
+                value_counts_df(df_embeddings_docket, "text_source"),
+                use_container_width=True,
+            )
+
+        st.write("#### Embeddings Preview")
+        embedding_preview_cols = available_columns(
+            df_embeddings_docket,
+            [
+                "comment_id",
+                "embedding_model",
+                "backend",
+                "embedding_dim",
+                "text_source",
+                "text_hash",
+                "embedded_at",
+            ],
+        )
+        st.dataframe(
+            df_embeddings_docket[embedding_preview_cols].head(row_limit),
+            use_container_width=True,
+        )
+
+    # Gold Clusters Section
+    st.markdown("---")
+    st.subheader("Gold Comment Clusters Panel")
+
+    if (
+        df_clusters is None
+        or df_memberships is None
+        or df_clusters_docket.empty
+        or df_memberships_docket.empty
+    ):
+        st.info("Gold cluster tables not found yet. Run ClusteringAgent.")
+        return
+
+    st.markdown(
+        f"Found gold cluster tables with **{len(df_clusters_docket)}** clusters and "
+        f"**{len(df_memberships_docket)}** memberships for docket `{active_docket}`."
+    )
+
+    cluster_filter_df = df_clusters_docket.copy()
+    membership_filter_df = df_memberships_docket.copy()
+
+    model_options = unique_values(cluster_filter_df, "embedding_model")
+    if model_options:
+        selected_model = st.selectbox("Filter embedding_model", options=model_options)
+        cluster_filter_df = cluster_filter_df[
+            cluster_filter_df["embedding_model"] == selected_model
+        ]
+        membership_filter_df = membership_filter_df[
+            membership_filter_df["embedding_model"] == selected_model
+        ]
+
+    threshold_options = unique_values(cluster_filter_df, "similarity_threshold")
+    if threshold_options:
+        selected_threshold = st.selectbox(
+            "Filter similarity_threshold", options=threshold_options
+        )
+        cluster_filter_df = cluster_filter_df[
+            cluster_filter_df["similarity_threshold"] == selected_threshold
+        ]
+        membership_filter_df = membership_filter_df[
+            membership_filter_df["similarity_threshold"] == selected_threshold
+        ]
+
+    run_id_options = unique_values(cluster_filter_df, "clustering_run_id")
+    if len(run_id_options) > 1:
+        selected_run_id = st.selectbox(
+            "Filter clustering_run_id", options=run_id_options
+        )
+        cluster_filter_df = cluster_filter_df[
+            cluster_filter_df["clustering_run_id"] == selected_run_id
+        ]
+        membership_filter_df = membership_filter_df[
+            membership_filter_df["clustering_run_id"] == selected_run_id
+        ]
+
+    if cluster_filter_df.empty or membership_filter_df.empty:
+        st.info("No clusters match the selected filters.")
+        return
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Total Clusters", len(cluster_filter_df))
+    with c2:
+        st.metric("Total Memberships", len(membership_filter_df))
+    with c3:
+        if "cluster_size" in cluster_filter_df.columns:
+            st.metric(
+                "Largest Cluster Size", int(cluster_filter_df["cluster_size"].max())
+            )
+        else:
+            st.metric("Largest Cluster Size", "N/A")
+    with c4:
+        thresholds = unique_values(cluster_filter_df, "similarity_threshold")
+        st.metric("Threshold Values", ", ".join(map(str, thresholds)) or "N/A")
+
+    st.write("#### Cluster Run Values")
+    run_values = {
+        "embedding_model": ", ".join(
+            map(str, unique_values(cluster_filter_df, "embedding_model"))
+        )
+        or "N/A",
+        "clustering_version": ", ".join(
+            map(str, unique_values(cluster_filter_df, "clustering_version"))
+        )
+        or "N/A",
+        "clustering_run_id": ", ".join(
+            map(str, unique_values(cluster_filter_df, "clustering_run_id"))
+        )
+        or "N/A",
+    }
+    st.json(run_values)
+
+    if (
+        "embedding_backend" in cluster_filter_df.columns
+        and (cluster_filter_df["embedding_backend"].astype(str) == "mock").any()
+    ):
+        st.warning(
+            "Source embedding backend is mock; clusters are for plumbing/debug only."
+        )
+
+    st.write("#### Cluster Table")
+    cluster_cols = available_columns(
+        cluster_filter_df,
+        [
+            "cluster_id",
+            "cluster_size",
+            "representative_comment_id",
+            "representative_text_hash",
+            "mean_similarity",
+            "min_similarity",
+            "max_similarity",
+            "candidate_count",
+            "embedding_backend",
+            "created_at",
+            "clustered_at",
+            "updated_at",
+        ],
+    )
+    cluster_table = cluster_filter_df[cluster_cols].sort_values(
+        by="cluster_size" if "cluster_size" in cluster_cols else "cluster_id",
+        ascending=False,
+    )
+    st.dataframe(cluster_table.head(row_limit), use_container_width=True)
+
+    cluster_ids = cluster_table["cluster_id"].dropna().astype(str).tolist()
+    selected_cluster_id = st.selectbox("Select Cluster ID", options=cluster_ids)
+    selected_members = membership_filter_df[
+        membership_filter_df["cluster_id"].astype(str) == selected_cluster_id
+    ].copy()
+    if "membership_rank" in selected_members.columns:
+        selected_members = selected_members.sort_values("membership_rank")
+
+    st.write("#### Selected Cluster Members")
+    member_cols = available_columns(
+        selected_members,
+        [
+            "comment_id",
+            "similarity_to_representative",
+            "membership_rank",
+            "text_hash",
+            "text_source",
+        ],
+    )
+    selected_members = add_text_preview(selected_members[member_cols], df_silver_docket)
+    st.dataframe(selected_members.head(row_limit), use_container_width=True)
 
 
 if __name__ == "__main__":
