@@ -46,5 +46,24 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - Improve docstrings and type hints
 - Add logging where it would help debugging
 
+## Session discipline
+- When asked for a plan first, stop after the plan and wait for approval. Do not start implementing.
+- Do not implement, run tests, stage files, or commit after saying you are waiting for approval. "Waiting for approval" means waiting.
+- At the end of every substantial session, update the Current status section below if the project state changed. Treat it as the single source of truth for where the project is.
+
 ## Current status
-AttachmentDownloaderAgent (ParserAgent v2B phase 1 of 4) complete. Phase 1 downloads attachment binaries to disk, computes checksums, and updates silver.comment_attachments with download metadata. Phases 2-4 are NOT done: phase 2 (text extraction from downloaded PDFs via pypdf/pdfplumber), phase 3 (reconciliation back into parsed_comments per a yet-to-be-written ADR), phase 4 (OCR fallback, position deferred). 8 unit tests passing. ADR-0004 documents the implicit schema-evolution policy currently inline in the downloader, with a planned refactor to shared/delta_utils/silver.py before a second adopter.
+- IngestionAgent complete and validated locally against delta-rs / Delta tables.
+- CFPB-2016-0025 ingested into bronze: 211,885 unique comments, 0 duplicate `comment_id`s.
+- ParserAgent v1 complete: deterministic title / body / missing parsing into `silver.parsed_comments`.
+- ParserAgent v2A complete: fetches per-comment regulations.gov detail JSON, enriches parsed comments, writes `silver.comment_details` and `silver.comment_attachments`, gated by a `max_detail_fetches` safety cap.
+- AttachmentDownloaderAgent complete for v2B phase 1: downloads attachment binaries, computes checksums, updates download metadata. PDF / DOCX text extraction, reconciliation back into `parsed_comments`, OCR, and LLM extraction are still deferred.
+- EmbeddingAgent complete for comment-level embeddings: writes `silver.comment_embeddings`, with a mock backend, a local `sentence-transformers` backend, and a Databricks Foundation Model backend stub (see ADR-0005).
+- Mock embedding smoke test passed on the CFPB sample: 11 substantive candidates embedded; rerun produced 11 cache hits and 0 writes.
+- Debug UI exists for bronze / silver / details / attachments inspection.
+- Latest test status: 53 unit tests passing, Ruff clean.
+
+### Next priorities
+1. Write `docs/system-map.md` and `docs/demo-story.md` so the project narrative is legible end-to-end.
+2. Run real embeddings on a tiny sample using the local `sentence-transformers` backend (and the Databricks Foundation Model backend once wired up).
+3. Build the first ClusteringAgent prototype over the embeddings.
+4. Later: attachment text extraction (ParserAgent v2B phases 2-4) and Databricks Vector Search integration.
