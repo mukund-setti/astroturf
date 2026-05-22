@@ -188,14 +188,15 @@ def get_records_per_day(
 
 
 def run_app():
-    st.set_page_config(page_title="Bronze Delta Table Debug UI", layout="wide")
-    st.title("Bronze Delta Table Debug UI")
+    st.set_page_config(page_title="Bronze & Silver Delta Lake Debug UI", layout="wide")
+    st.title("AstroTurf medaillon Debug UI")
     st.caption(
-        "Internal developer tool for visually inspecting ingestion results and table health."
+        "Internal developer tool for visually inspecting bronze raw ingestion, details enrichment, and silver attachment cataloging."
     )
     st.info(
-        "**Bronze Limitation Note:** Bronze contains regulations.gov list-endpoint metadata only. "
-        "Full submitted comment text and attachment/PDF content are expected to be populated by ParserAgent into silver."
+        "**Medallion Architecture Check:** Bronze stores raw regulations.gov list-endpoint records. "
+        "ParserAgent v2A enriches silver tables by fetching individual comment detail JSON bodies, cataloging attachments, "
+        "and detecting boilerplate cover notes."
     )
 
     # Sidebar inputs
@@ -205,6 +206,12 @@ def run_app():
     )
     silver_path = st.sidebar.text_input(
         "Silver Table Path", value="./data/silver/parsed_comments"
+    )
+    details_path = st.sidebar.text_input(
+        "Details Table Path", value="./data/silver/comment_details"
+    )
+    attachments_path = st.sidebar.text_input(
+        "Attachments Table Path", value="./data/silver/comment_attachments"
     )
     row_limit = st.sidebar.selectbox("Row Limit", options=[25, 100, 500, 1000], index=0)
 
@@ -221,6 +228,10 @@ def run_app():
             language="powershell",
         )
         return
+
+    # Load detail and attachments tables globally for docket mapping
+    df_details = load_delta_table(details_path)
+    df_attachments = load_delta_table(attachments_path)
 
     # Extract available dockets
     dockets = get_dockets(df)
@@ -247,6 +258,19 @@ def run_app():
         df_docket = df[df["docket_id"] == active_docket]
 
     st.write(f"### Active Docket ID: `{active_docket}`")
+
+    # Filter details and attachments by active docket
+    df_details_docket = None
+    if df_details is not None and not df_details.empty:
+        if "docket_id" in df_details.columns:
+            df_details_docket = df_details[df_details["docket_id"] == active_docket]
+
+    df_attachments_docket = None
+    if df_attachments is not None and not df_attachments.empty:
+        if "docket_id" in df_attachments.columns:
+            df_attachments_docket = df_attachments[
+                df_attachments["docket_id"] == active_docket
+            ]
 
     # Overview panel
     stats = get_overview_stats(df, active_docket, bronze_path)
@@ -295,7 +319,6 @@ def run_app():
     # Data preview
     st.subheader("Data Preview")
 
-    # Select which columns to include in preview based on existence
     expected_preview_cols = [
         "comment_id",
         "docket_id",
@@ -308,7 +331,6 @@ def run_app():
     ]
     preview_cols = [col for col in expected_preview_cols if col in df_docket.columns]
 
-    # Dynamically find any JSON or raw columns
     json_candidate_cols = ["attributes_json", "raw_json", "metadata_json"]
     for col in df_docket.columns:
         if col not in preview_cols:
@@ -337,30 +359,59 @@ def run_app():
     st.dataframe(df_preview.head(row_limit), use_container_width=True)
 
     # JSON Preview
-    st.subheader("JSON Metadata Inspector")
-    json_col_to_use = None
-    for col in json_candidate_cols:
-        if col in df_docket.columns:
-            json_col_to_use = col
-            break
+    st.subheader("JSON Metadata & Detail Inspector")
+    inspector_mode = st.radio(
+        "Select JSON Inspector Source:",
+        ["Bronze attributes_json", "Silver raw_detail_json (Enriched)"],
+    )
 
-    if not json_col_to_use:
-        for col in df_docket.columns:
-            if col.endswith("_json") or col == "metadata":
+    if inspector_mode == "Bronze attributes_json":
+        json_col_to_use = None
+        for col in json_candidate_cols:
+            if col in df_docket.columns:
                 json_col_to_use = col
                 break
 
-    if json_col_to_use:
-        st.write(f"Displaying JSON from column: `{json_col_to_use}`")
-        if "comment_id" in df_docket.columns:
-            comment_ids = df_docket["comment_id"].dropna().unique()
+        if not json_col_to_use:
+            for col in df_docket.columns:
+                if col.endswith("_json") or col == "metadata":
+                    json_col_to_use = col
+                    break
+
+        if json_col_to_use:
+            st.write(f"Displaying JSON from column: `{json_col_to_use}`")
+            if "comment_id" in df_docket.columns:
+                comment_ids = df_docket["comment_id"].dropna().unique()
+                selected_cid = st.selectbox(
+                    "Select Comment ID to inspect JSON metadata", options=comment_ids
+                )
+                if selected_cid:
+                    row_data = df_docket[df_docket["comment_id"] == selected_cid]
+                    if not row_data.empty:
+                        val = row_data[json_col_to_use].iloc[0]
+                        try:
+                            if isinstance(val, str):
+                                parsed_json = json.loads(val)
+                            else:
+                                parsed_json = val
+                            st.json(parsed_json)
+                        except Exception as e:
+                            st.warning(f"Could not parse JSON: {e}")
+                            st.text(val)
+        else:
+            st.info("No JSON metadata column available.")
+    else:
+        if df_details_docket is not None and not df_details_docket.empty:
+            comment_ids = df_details_docket["comment_id"].dropna().unique()
             selected_cid = st.selectbox(
-                "Select Comment ID to inspect JSON metadata", options=comment_ids
+                "Select Comment ID to inspect detail JSON payload", options=comment_ids
             )
             if selected_cid:
-                row_data = df_docket[df_docket["comment_id"] == selected_cid]
+                row_data = df_details_docket[
+                    df_details_docket["comment_id"] == selected_cid
+                ]
                 if not row_data.empty:
-                    val = row_data[json_col_to_use].iloc[0]
+                    val = row_data["raw_detail_json"].iloc[0]
                     try:
                         if isinstance(val, str):
                             parsed_json = json.loads(val)
@@ -370,18 +421,19 @@ def run_app():
                     except Exception as e:
                         st.warning(f"Could not parse JSON: {e}")
                         st.text(val)
-    else:
-        st.info("No JSON metadata column available.")
+        else:
+            st.info("No enriched comment details available. Run ParserAgent v2A first.")
 
     # White-box diagnostics
     st.subheader("White-Box Diagnostics")
 
-    diag_tab1, diag_tab2, diag_tab3, diag_tab4 = st.tabs(
+    diag_tab1, diag_tab2, diag_tab3, diag_tab4, diag_tab5 = st.tabs(
         [
             "Records Per Day",
             "Null Count & Schema",
             "Duplicate comment_id Rows",
             "Sample Raw Records",
+            "Comment Attachments Catalog",
         ]
     )
 
@@ -390,7 +442,6 @@ def run_app():
         if "last_modified_date" in df_docket.columns:
             daily_df = get_records_per_day(df, active_docket, "last_modified_date")
             if not daily_df.empty:
-                # Ensure date is converted to string for cleaner categorical display on x-axis
                 daily_df = daily_df.copy()
                 daily_df["date"] = daily_df["date"].astype(str)
 
@@ -446,7 +497,6 @@ def run_app():
         sample_df = df_docket.sample(sample_count, random_state=42)
         for idx, (_, row) in enumerate(sample_df.iterrows(), 1):
             with st.expander(f"Raw Sample #{idx} (Row index {row.name})"):
-                # Convert row to dictionary safely converting datetime to str
                 row_dict = row.to_dict()
                 for k, v in row_dict.items():
                     if isinstance(v, pd.Timestamp):
@@ -454,6 +504,18 @@ def run_app():
                     elif pd.isna(v):
                         row_dict[k] = None
                 st.json(row_dict)
+
+    with diag_tab5:
+        st.write("#### Enriched Comment Attachments Catalog")
+        if df_attachments_docket is not None and not df_attachments_docket.empty:
+            st.success(
+                f"Discovered **{len(df_attachments_docket)}** attachment files for docket `{active_docket}`."
+            )
+            st.dataframe(df_attachments_docket, use_container_width=True)
+        else:
+            st.info(
+                "No attachments cataloged for this docket yet. Run ParserAgent v2A to catalog comments."
+            )
 
     # Duplicate text inspection
     st.subheader("Duplicate Text Inspection")
@@ -465,7 +527,6 @@ def run_app():
             break
 
     if text_col_to_use:
-        # Check if there is actual non-empty text
         non_empty_texts = df_docket[text_col_to_use].dropna().astype(str).str.strip()
         non_empty_texts = non_empty_texts[non_empty_texts != ""]
 
@@ -501,7 +562,7 @@ def run_app():
                 f"Found silver table at `{silver_path}` with **{total_silver}** parsed rows for docket `{active_docket}`."
             )
 
-            # Metrics
+            # Metrics Row 1
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.metric("Total Silver Rows", total_silver)
@@ -517,6 +578,31 @@ def run_app():
                     st.metric("Parse Errors", int(err_count))
                 else:
                     st.metric("Parse Errors", "N/A")
+
+            # Metrics Row 2 (Enriched statistics)
+            c4, c5, c6 = st.columns(3)
+            with c4:
+                enriched_success = 0
+                if df_details_docket is not None and not df_details_docket.empty:
+                    if "enrichment_status" in df_details_docket.columns:
+                        enriched_success = (
+                            df_details_docket["enrichment_status"] == "success"
+                        ).sum()
+                st.metric("Enriched Comment Details", int(enriched_success))
+            with c5:
+                num_attachments = 0
+                if (
+                    df_attachments_docket is not None
+                    and not df_attachments_docket.empty
+                ):
+                    num_attachments = len(df_attachments_docket)
+                st.metric("Cataloged Attachments", int(num_attachments))
+            with c6:
+                num_covers = 0
+                if df_details_docket is not None and not df_details_docket.empty:
+                    if "is_cover_note" in df_details_docket.columns:
+                        num_covers = df_details_docket["is_cover_note"].sum()
+                st.metric("Boilerplate Cover Notes", int(num_covers))
 
             # Breakdowns
             col_b1, col_b2 = st.columns(2)
@@ -547,7 +633,6 @@ def run_app():
                     dup_hashes = dup_hashes[dup_hashes > 1].reset_index()
                     dup_hashes.columns = ["normalized_text_hash", "count"]
                     if not dup_hashes.empty:
-                        # Find original text sample for each hash
                         hash_to_sample = {}
                         for _, r in df_silver_docket.iterrows():
                             h = r.get("normalized_text_hash")
@@ -570,6 +655,8 @@ def run_app():
                 "parse_status",
                 "text_source",
                 "char_count",
+                "has_attachments",
+                "attachment_count",
                 "normalized_text",
             ]
             preview_cols = [c for c in preview_cols if c in df_silver_docket.columns]

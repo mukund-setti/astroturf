@@ -53,6 +53,12 @@ def main():
         help="Stop after processing this many comments",
     )
     parser.add_argument(
+        "--max-detail-fetches",
+        type=int,
+        default=None,
+        help="Stop making detail API calls after this many attempts",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         help="Logging level (DEBUG, INFO, WARNING, ERROR)",
@@ -74,6 +80,8 @@ def main():
     print(f"Silver path: {args.silver_path}")
     if args.max_rows is not None:
         print(f"Max rows limit: {args.max_rows}")
+    if args.max_detail_fetches is not None:
+        print(f"Max detail fetches limit: {args.max_detail_fetches}")
 
     agent = ParserAgent()
     inputs = ParserInput(
@@ -81,6 +89,7 @@ def main():
         bronze_path=args.bronze_path,
         silver_path=args.silver_path,
         max_rows=args.max_rows,
+        max_detail_fetches=args.max_detail_fetches,
     )
 
     try:

@@ -36,6 +36,7 @@ class ParsedComment(BaseModel):
     token_estimate: int
     char_count: int
     has_attachments: bool = False
+    attachment_count: int = 0
     parse_status: str
     parse_error: str | None = None
     parsed_at: datetime
@@ -58,6 +59,7 @@ _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
     "token_estimate": (pa.int64(), T.LongType()),
     "char_count": (pa.int64(), T.LongType()),
     "has_attachments": (pa.bool_(), T.BooleanType()),
+    "attachment_count": (pa.int64(), T.LongType()),
     "parse_status": (pa.string(), T.StringType()),
     "parse_error": (pa.string(), T.StringType()),
     "parsed_at": (pa.timestamp("us", tz="UTC"), T.TimestampType()),

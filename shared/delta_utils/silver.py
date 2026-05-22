@@ -48,3 +48,19 @@ def merge_parsed_comments(
         "inserted": int(metrics.get("num_target_rows_inserted", 0)),
         "updated": int(metrics.get("num_target_rows_updated", 0)),
     }
+
+
+def merge_comment_details(
+    path: str | Path,
+    arrow_table: pa.Table,
+) -> dict[str, int]:
+    """Idempotent upsert of detail rows into silver.comment_details."""
+    return merge_parsed_comments(path, arrow_table, key="comment_id")
+
+
+def merge_comment_attachments(
+    path: str | Path,
+    arrow_table: pa.Table,
+) -> dict[str, int]:
+    """Idempotent upsert of attachment rows into silver.comment_attachments."""
+    return merge_parsed_comments(path, arrow_table, key="attachment_id")
