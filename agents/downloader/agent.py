@@ -20,7 +20,7 @@ import httpx
 import pyarrow as pa
 from deltalake import DeltaTable
 
-from shared.delta_utils.silver import merge_comment_attachments
+from shared.delta_utils.silver import ensure_schema, merge_comment_attachments
 from shared.schemas.comment_attachments import (
     CommentAttachment,
     comment_attachment_arrow_schema,
@@ -129,25 +129,11 @@ class AttachmentDownloaderAgent:
         # 1. Load attachments Delta table
         dt = DeltaTable(table_path)
         
-        # Dynamic schema evolution to migrate existing tables with old schemas safely
-        current_schema = dt.schema()
-        field_names = [f.name for f in current_schema.fields]
-        missing_fields = [name for name in comment_attachment_arrow_schema().names if name not in field_names]
-        if missing_fields:
-            log.info("Delta table is missing new v2B fields: %s. Performing schema evolution.", missing_fields)
-            all_records = dt.to_pyarrow_table()
-            new_schema = comment_attachment_arrow_schema()
-            
-            for field in new_schema:
-                if field.name not in all_records.schema.names:
-                    null_arr = pa.nulls(len(all_records), type=field.type)
-                    all_records = all_records.append_column(field, null_arr)
-            
-            all_records = all_records.cast(new_schema)
-            from deltalake import write_deltalake
-            write_deltalake(table_path, all_records, mode="overwrite", schema_mode="overwrite")
-            dt = DeltaTable(table_path)
-            log.info("Delta table schema successfully evolved.")
+        # Ensure schema evolution to migrate existing tables with old schemas safely
+        ensure_schema(table_path, comment_attachment_arrow_schema(), allow_destructive=True)
+        
+        # Reload dt to reflect any schema modifications
+        dt = DeltaTable(table_path)
 
         arrow_table = dt.to_pyarrow_table()
 
