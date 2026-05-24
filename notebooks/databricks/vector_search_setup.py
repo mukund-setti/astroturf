@@ -34,7 +34,7 @@
 
 # COMMAND ----------
 
-CATALOG = "astroturf"
+CATALOG = "workspace"
 SILVER_SCHEMA = "silver"
 
 BASE_EMBEDDINGS_TABLE = f"{CATALOG}.{SILVER_SCHEMA}.comment_embeddings"
@@ -62,24 +62,24 @@ EMBEDDING_COLUMN = "embedding_vector"
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC SHOW SCHEMAS IN astroturf;
+# MAGIC SHOW SCHEMAS IN workspace;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DESCRIBE TABLE astroturf.silver.comment_embeddings;
+# MAGIC DESCRIBE TABLE workspace.silver.comment_embeddings;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DESCRIBE TABLE astroturf.silver.parsed_comments;
+# MAGIC DESCRIBE TABLE workspace.silver.parsed_comments;
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Step 2 — Create the model-filtered source view
 # MAGIC
-# MAGIC `astroturf.silver.comment_embeddings_bge_large` is the fixed-dimension
+# MAGIC `workspace.silver.comment_embeddings_bge_large` is the fixed-dimension
 # MAGIC slice that Vector Search will index. A view is preferred over a
 # MAGIC materialized table for v1: the slice is small and the filter is trivial.
 # MAGIC If the sync mode in Step 6 requires a managed Delta table instead,
@@ -88,8 +88,20 @@ EMBEDDING_COLUMN = "embedding_vector"
 
 # COMMAND ----------
 
+for cmd in [
+    "DROP VIEW IF EXISTS workspace.silver.comment_embeddings_bge_large",
+    "DROP TABLE IF EXISTS workspace.silver.comment_embeddings_bge_large",
+]:
+    try:
+        spark.sql(cmd)
+    except Exception:
+        pass
+
+
+# COMMAND ----------
+
 # MAGIC %sql
-# MAGIC CREATE OR REPLACE VIEW astroturf.silver.comment_embeddings_bge_large AS
+# MAGIC CREATE OR REPLACE TABLE workspace.silver.comment_embeddings_bge_large AS
 # MAGIC SELECT
 # MAGIC   comment_id,
 # MAGIC   docket_id,
@@ -100,7 +112,7 @@ EMBEDDING_COLUMN = "embedding_vector"
 # MAGIC   embedding_vector,
 # MAGIC   embedded_at,
 # MAGIC   backend
-# MAGIC FROM astroturf.silver.comment_embeddings
+# MAGIC FROM workspace.silver.comment_embeddings
 # MAGIC WHERE embedding_model = 'databricks-bge-large-en'
 # MAGIC   AND embedding_dim = 1024
 # MAGIC   AND backend = 'databricks_foundation_model';
@@ -128,13 +140,13 @@ EMBEDDING_COLUMN = "embedding_vector"
 # MAGIC   MAX(embedding_dim)             AS max_dim,
 # MAGIC   COUNT(DISTINCT embedding_model) AS distinct_models,
 # MAGIC   COUNT(DISTINCT backend)        AS distinct_backends
-# MAGIC FROM astroturf.silver.comment_embeddings_bge_large;
+# MAGIC FROM workspace.silver.comment_embeddings_bge_large;
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC SELECT DISTINCT embedding_model, backend, embedding_dim
-# MAGIC FROM astroturf.silver.comment_embeddings_bge_large;
+# MAGIC FROM workspace.silver.comment_embeddings_bge_large;
 
 # COMMAND ----------
 
@@ -172,20 +184,42 @@ f"Slice OK: {_row_count} rows, dim={EMBEDDING_DIM}, model={EMBEDDING_MODEL}"
 # MAGIC
 # MAGIC Vector Search syncs from a Delta source generally require CDF on the
 # MAGIC underlying table. The filtered view in Step 2 reads from
-# MAGIC `astroturf.silver.comment_embeddings`, so set the property on the base
+# MAGIC `workspace.silver.comment_embeddings`, so set the property on the base
 # MAGIC table. If you materialized the filtered slice as its own Delta table,
 # MAGIC set CDF on that table instead.
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC ALTER TABLE astroturf.silver.comment_embeddings
-# MAGIC   SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+# MAGIC %python
+# MAGIC import re
+# MAGIC # 1. Enable CDF on underlying base embeddings Delta table path
+# MAGIC try:
+# MAGIC     tbl_desc = spark.sql(f"SHOW CREATE TABLE {BASE_EMBEDDINGS_TABLE}").collect()[0][0]
+# MAGIC     match = re.search(r"delta\.`([^`]+)`", tbl_desc)
+# MAGIC     if match:
+# MAGIC         resolved_target = f"delta.`{match.group(1)}`"
+# MAGIC     else:
+# MAGIC         resolved_target = BASE_EMBEDDINGS_TABLE
+# MAGIC except Exception:
+# MAGIC     resolved_target = BASE_EMBEDDINGS_TABLE
+# MAGIC
+# MAGIC print(f"Enabling Change Data Feed on base target: {resolved_target}")
+# MAGIC spark.sql(f"ALTER TABLE {resolved_target} SET TBLPROPERTIES (delta.enableChangeDataFeed = true)")
+# MAGIC
+# MAGIC # 2. Enable CDF on the filtered table
+# MAGIC print(f"Enabling Change Data Feed on filtered table: {FILTERED_SOURCE_VIEW}")
+# MAGIC try:
+# MAGIC     spark.sql(f"ALTER TABLE {FILTERED_SOURCE_VIEW} SET TBLPROPERTIES (delta.enableChangeDataFeed = true)")
+# MAGIC except Exception as e:
+# MAGIC     print(f"Warning: Could not enable CDF directly on {FILTERED_SOURCE_VIEW}: {e}")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SHOW TBLPROPERTIES astroturf.silver.comment_embeddings;
+# MAGIC %python
+# MAGIC print("Base table properties:")
+# MAGIC display(spark.sql(f"SHOW TBLPROPERTIES {resolved_target}"))
+# MAGIC print("Filtered table properties:")
+# MAGIC display(spark.sql(f"SHOW TBLPROPERTIES {FILTERED_SOURCE_VIEW}"))
 
 # COMMAND ----------
 
@@ -245,7 +279,13 @@ f"Index requested: {VS_INDEX_NAME}"
 import time  # noqa: E402
 
 index = vsc.get_index(endpoint_name=VS_ENDPOINT_NAME, index_name=VS_INDEX_NAME)
-index.sync()
+try:
+    print("Triggering index sync...")
+    index.sync()
+except Exception as e:
+    print(
+        f"Note: Sync trigger returned: {e}. Moving to polling loop to wait for index readiness."
+    )
 
 # Poll until the index reports a ready/online status. Record duration for
 # the artifacts in Step 8.
@@ -371,7 +411,7 @@ display(_previewed)
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC DESCRIBE EXTENDED astroturf.silver.comment_embeddings_bge_large;
+# MAGIC DESCRIBE EXTENDED workspace.silver.comment_embeddings_bge_large;
 
 # COMMAND ----------
 

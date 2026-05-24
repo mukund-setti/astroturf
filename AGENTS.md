@@ -66,8 +66,14 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - EPA-HQ-OAR-2021-0317 exact-hash baseline smoke test passed: 396 candidate `detail_comment_text` rows, 7 duplicate-hash clusters, 16 memberships, largest cluster size 4.
 - Debug UI expanded to include exact-hash baseline, cluster campaign style classification, and comprehensive cluster evidence inspection.
 - Evidence export CLI added: `scripts/export_cluster_evidence.py` writes bounded Markdown cluster-review reports from existing gold/silver Delta tables; EPA-HQ-OAR-2021-0317 report generated under `data/exports/`.
-- Latest test status: 92 unit tests passing, Ruff clean, Ruff format clean.
+- Databricks demo workflow scaffolding added: `notebooks/databricks/workflow_tasks.py` plus `docs/databricks-workflow.md` cover `load_sample_tables -> embed -> cluster -> export_dashboard_data` for the CFPB/EPA demo.
+- Databricks Vector Search v1 reviewer-only setup added: `notebooks/databricks/vector_search_setup.py` plus `docs/databricks-vector-search.md` create the BGE-large filtered source and manual-sync index runbook, without wiring Vector Search into `ClusteringAgent`.
+- **Live Databricks Workflow Execution SUCCESS**: Run ID `864884109927694` successfully executed the full four-task multi-task pipeline (`load_sample_tables` -> `embed` -> `cluster` -> `export_dashboard_data`) for the EPA docket `EPA-HQ-OAR-2021-0317` on Serverless compute. Final Unity Catalog row counts verified: bronze/silver comments (1,000), BGE embeddings (396), gold clusters (13), gold memberships (162), review export (162).
+- **Live Databricks Vector Search Setup SUCCESS**: Run ID `162858305180109` created the BGE-filtered table and synced it to `workspace.silver.comment_embeddings_bge_large_index` on `astroturf-vs-endpoint`. Directly verified index state as `ONLINE_NO_PENDING_UPDATE` with exactly 396 rows synced in ~61 seconds, and live nearest-neighbor queries returning high-fidelity matches.
+- Full cell-by-cell execution outputs and HTML run views saved locally in `data/exports/` for verification.
+- Latest test status: 107 tests passing, Ruff clean, Ruff format clean. Verified locally with `.uv-test-venv\Scripts\python.exe`.
 
 ### Next priorities
-1. Run the Databricks Foundation Model backend on a Databricks-flavored path once live workspace access is explicitly approved (batch safety default of 16 successfully integrated).
-2. Later: attachment text extraction (ParserAgent v2B phases 2-4) and Databricks Vector Search integration.
+1. Build out the frontend reviewer Demo UI (cluster list and cluster detail view panels in Streamlit) using the Flat export table data.
+2. Attachment text extraction (ParserAgent v2B phases 2-4) and production Vector Search integration into `ClusteringAgent`.
+

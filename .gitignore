@@ -20,3 +20,6 @@ mlflow.db
 
 # Local review scratch files (Claude conversations, etc.)
 _review_*.txt
+
+# Claude Code project state
+.claude/

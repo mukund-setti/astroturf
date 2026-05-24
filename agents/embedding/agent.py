@@ -28,7 +28,11 @@ import pyarrow.compute as pc
 from deltalake import DeltaTable
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from shared.delta_utils.silver import ensure_schema, merge_comment_embeddings
+from shared.delta_utils.silver import (
+    ensure_schema,
+    merge_comment_embeddings,
+    load_delta_as_pyarrow,
+)
 from shared.schemas.comment_embeddings import (
     CommentEmbedding,
     comment_embedding_arrow_schema,
@@ -541,7 +545,7 @@ class EmbeddingAgent:
         Corruption checks (None / empty text) are deferred to the agent loop so
         anomalies surface in a log warning rather than being silently dropped.
         """
-        parsed_table = DeltaTable(inputs.parsed_path).to_pyarrow_table()
+        parsed_table = load_delta_as_pyarrow(inputs.parsed_path)
         filtered = parsed_table.filter(
             (pc.field("docket_id") == inputs.docket_id)
             & pc.field("text_source").isin(list(SUBSTANTIVE_TEXT_SOURCES))
@@ -563,7 +567,7 @@ class EmbeddingAgent:
         """Return {comment_id: text_hash} for rows already embedded with model_name."""
         if not DeltaTable.is_deltatable(embeddings_path):
             return {}
-        table = DeltaTable(embeddings_path).to_pyarrow_table()
+        table = load_delta_as_pyarrow(embeddings_path)
         if table.num_rows == 0:
             return {}
         filtered = table.filter(pc.field("embedding_model") == model_name)
@@ -580,7 +584,7 @@ def _rows_to_arrow(rows: list[CommentEmbedding]) -> pa.Table:
     schema = comment_embedding_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)

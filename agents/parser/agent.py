@@ -621,7 +621,7 @@ def _parsed_rows_to_arrow(rows: list[ParsedComment]) -> pa.Table:
     schema = parsed_comment_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)
@@ -631,7 +631,7 @@ def _detail_rows_to_arrow(rows: list[CommentDetail]) -> pa.Table:
     schema = comment_detail_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)
@@ -641,7 +641,7 @@ def _attachment_rows_to_arrow(rows: list[CommentAttachment]) -> pa.Table:
     schema = comment_attachment_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)

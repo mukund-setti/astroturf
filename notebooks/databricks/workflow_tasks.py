@@ -57,6 +57,41 @@ repo_path = dbutils.widgets.get("repo_path").rstrip("/")
 if repo_path and repo_path not in sys.path:
     sys.path.insert(0, repo_path)
 
+
+# Prioritize Databricks Serverless virtual environment dependencies in sys.path
+import sys
+
+venv_paths = [
+    p for p in sys.path if "envs/pythonEnv-" in p and p.endswith("site-packages")
+]
+for p in venv_paths:
+    try:
+        sys.path.remove(p)
+    except ValueError:
+        pass
+    sys.path.insert(0, p)
+
+try:
+    import pyarrow
+
+    print(f"PyArrow version loaded: {pyarrow.__version__} from {pyarrow.__file__}")
+except Exception as e:
+    print(f"Failed to inspect PyArrow: {e}")
+
+
+# Configure MLflow model registry URI bypass for Databricks Serverless (Spark Connect)
+try:
+    import mlflow
+    import mlflow.tracking._model_registry.utils
+
+    mlflow.tracking._model_registry.utils._get_registry_uri_from_spark_session = (
+        lambda: "databricks-uc"
+    )
+    mlflow.set_registry_uri("databricks-uc")
+    print("Successfully configured Databricks Serverless MLflow model registry bypass.")
+except Exception as e:
+    print(f"Warning: Failed to configure MLflow model registry bypass: {e}")
+
 raw_comments_path = f"{data_root}/bronze/raw_comments"
 parsed_path = f"{data_root}/silver/parsed_comments"
 embeddings_path = f"{data_root}/silver/comment_embeddings"
@@ -104,16 +139,33 @@ if task in ("all", "load_sample_tables"):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.gold")
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.demo")
 
+    # Clean old directories to ensure we don't inherit the deletionVectors table feature in existing Delta logs
+    import shutil
+
+    for p in [
+        raw_comments_path,
+        parsed_path,
+        embeddings_path,
+        clusters_path,
+        memberships_path,
+    ]:
+        try:
+            shutil.rmtree(p)
+            print(f"Cleaned FUSE path: {p}")
+        except Exception as e:
+            print(f"Path cleaning skipped for {p}: {e}")
+
     raw_df = spark.read.parquet(f"{bronze_volume}/raw_comments/")
     (
         raw_df.write.format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
+        .option("delta.enableDeletionVectors", "false")
         .save(raw_comments_path)
     )
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {catalog}.bronze.raw_comments "
-        f"USING DELTA LOCATION '{raw_comments_path}'"
+        f"CREATE OR REPLACE VIEW {catalog}.bronze.raw_comments "
+        f"AS SELECT * FROM delta.`{raw_comments_path}`"
     )
 
     parsed_df = spark.read.parquet(f"{bronze_volume}/parsed_comments/")
@@ -121,11 +173,12 @@ if task in ("all", "load_sample_tables"):
         parsed_df.write.format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
+        .option("delta.enableDeletionVectors", "false")
         .save(parsed_path)
     )
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {catalog}.silver.parsed_comments "
-        f"USING DELTA LOCATION '{parsed_path}'"
+        f"CREATE OR REPLACE VIEW {catalog}.silver.parsed_comments "
+        f"AS SELECT * FROM delta.`{parsed_path}`"
     )
 
     raw_count = spark.table(f"{catalog}.bronze.raw_comments").count()
@@ -193,8 +246,8 @@ if task in ("all", "embed"):
     )
 
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {catalog}.silver.comment_embeddings "
-        f"USING DELTA LOCATION '{embeddings_path}'"
+        f"CREATE OR REPLACE VIEW {catalog}.silver.comment_embeddings "
+        f"AS SELECT * FROM delta.`{embeddings_path}`"
     )
 
     print(f"rows_written={embed_output.rows_written}")
@@ -260,12 +313,12 @@ if task in ("all", "cluster"):
     )
 
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {catalog}.gold.comment_clusters "
-        f"USING DELTA LOCATION '{clusters_path}'"
+        f"CREATE OR REPLACE VIEW {catalog}.gold.comment_clusters "
+        f"AS SELECT * FROM delta.`{clusters_path}`"
     )
     spark.sql(
-        f"CREATE TABLE IF NOT EXISTS {catalog}.gold.comment_cluster_memberships "
-        f"USING DELTA LOCATION '{memberships_path}'"
+        f"CREATE OR REPLACE VIEW {catalog}.gold.comment_cluster_memberships "
+        f"AS SELECT * FROM delta.`{memberships_path}`"
     )
 
     print(f"rows_written={cluster_output.rows_written}")

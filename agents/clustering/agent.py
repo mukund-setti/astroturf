@@ -20,6 +20,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 from deltalake import DeltaTable
 
+from shared.delta_utils.silver import load_delta_as_pyarrow
 from shared.delta_utils.gold import (
     delete_clustering_scope,
     merge_comment_cluster_memberships,
@@ -217,7 +218,7 @@ class ClusteringAgent:
     def _load_candidates(
         self, inputs: ClusteringInput
     ) -> tuple[list[dict[str, Any]], int, int]:
-        table = DeltaTable(inputs.embeddings_path).to_pyarrow_table()
+        table = load_delta_as_pyarrow(inputs.embeddings_path)
         filtered = table.filter(
             (pc.field("docket_id") == inputs.docket_id)
             & (pc.field("embedding_model") == inputs.embedding_model)
@@ -450,7 +451,7 @@ def _clusters_to_arrow(rows: list[CommentCluster]) -> pa.Table:
     schema = comment_cluster_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)
@@ -460,7 +461,7 @@ def _memberships_to_arrow(rows: list[CommentClusterMembership]) -> pa.Table:
     schema = comment_cluster_membership_arrow_schema()
     columns: dict[str, list[Any]] = {name: [] for name in schema.names}
     for row in rows:
-        d = row.model_dump()
+        d = row.model_dump() if hasattr(row, "model_dump") else row.dict()
         for name in columns:
             columns[name].append(d[name])
     return pa.Table.from_pydict(columns, schema=schema)

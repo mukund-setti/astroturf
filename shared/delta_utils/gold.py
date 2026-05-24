@@ -9,6 +9,7 @@ import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 
 from shared.delta_utils.silver import ensure_schema
+from shared.delta_utils.fuse_bypass import local_tmp_delta_path
 
 log = logging.getLogger(__name__)
 
@@ -27,23 +28,24 @@ def _merge_with_predicate(
     arrow_table: pa.Table,
     predicate: str,
 ) -> dict[str, int]:
-    _initialize_if_needed(path, arrow_table.schema)
-    dt = DeltaTable(str(path))
-    metrics = (
-        dt.merge(
-            source=arrow_table,
-            predicate=predicate,
-            source_alias="source",
-            target_alias="target",
+    with local_tmp_delta_path(path) as local_path:
+        _initialize_if_needed(local_path, arrow_table.schema)
+        dt = DeltaTable(str(local_path))
+        metrics = (
+            dt.merge(
+                source=arrow_table,
+                predicate=predicate,
+                source_alias="source",
+                target_alias="target",
+            )
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute()
         )
-        .when_matched_update_all()
-        .when_not_matched_insert_all()
-        .execute()
-    )
-    return {
-        "inserted": int(metrics.get("num_target_rows_inserted", 0)),
-        "updated": int(metrics.get("num_target_rows_updated", 0)),
-    }
+        return {
+            "inserted": int(metrics.get("num_target_rows_inserted", 0)),
+            "updated": int(metrics.get("num_target_rows_updated", 0)),
+        }
 
 
 def _scope_predicate(
@@ -75,18 +77,19 @@ def delete_clustering_scope(
     similarity_threshold: float,
 ) -> int:
     """Delete prior deterministic clustering output for an exact run scope."""
-    _initialize_if_needed(path, schema)
-    ensure_schema(path, schema, allow_destructive=True)
-    dt = DeltaTable(str(path))
-    metrics = dt.delete(
-        predicate=_scope_predicate(
-            docket_id=docket_id,
-            embedding_model=embedding_model,
-            clustering_version=clustering_version,
-            similarity_threshold=similarity_threshold,
+    with local_tmp_delta_path(path) as local_path:
+        _initialize_if_needed(local_path, schema)
+        ensure_schema(local_path, schema, allow_destructive=True)
+        dt = DeltaTable(str(local_path))
+        metrics = dt.delete(
+            predicate=_scope_predicate(
+                docket_id=docket_id,
+                embedding_model=embedding_model,
+                clustering_version=clustering_version,
+                similarity_threshold=similarity_threshold,
+            )
         )
-    )
-    return int(metrics.get("num_deleted_rows", 0))
+        return int(metrics.get("num_deleted_rows", 0))
 
 
 def merge_comment_clusters(
