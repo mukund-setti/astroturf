@@ -231,6 +231,47 @@ DATABRICKS_AUTOPILOT_JOB_ID="<optional-autopilot-workflow-job-id>"
 
 If no cloud credentials exist or process triggering is disabled, use `ASTROTURF_EXECUTION_MODE=command` (default). Clicking "Register Docket Draft" will save a draft record in the queue database and redirect to `/analysis/[request_id]` where copy-pasteable terminal commands are displayed for offline developer execution. 
 
+## Production Control Plane & Database Migrations (PostgreSQL)
+
+In hosted production environments (`ASTROTURF_DEPLOYMENT_MODE=production`), Astroturf operates a **durable PostgreSQL control plane** instead of using unstable server-local JSON file stores. This makes the Next.js control plane fully stateless, reliable, and production-safe.
+
+### Required Database Settings
+
+Ensure you configure the following variables in your hosted environment:
+
+```env
+# Enforce production mode (disables all local JSON fallback operations)
+ASTROTURF_DEPLOYMENT_MODE=production
+
+# Provide standard PostgreSQL connection URL (e.g. Neon, Supabase, Vercel Postgres, Railway)
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require
+```
+
+### Relational Database Migrations
+
+Before deploying the UI web layer, apply the relational database migrations to establish the schema:
+
+```bash
+psql -d "DATABASE_URL" -f ui/db/migrations/001_initial_control_plane.sql
+```
+
+The migration defines:
+- `docket_catalog`: Table caching discovered rulemaking dockets, metadata, and prioritization scores.
+- `analysis_requests`: Table tracking jobs sent to the Databricks Jobs scheduler.
+- `watchlist_items`: Table representing keywords, dockets, topics, and agencies active in monitoring.
+- `autopilot_runs`: History of proactive discovery/monitoring runs.
+
+### Pre-Deployment Verification
+
+Verify database connectivity, schema tables, and Databricks cloud variables using our built-in production readiness check utility:
+
+```powershell
+cd ui
+npm run check-env
+```
+
+The script will automatically assert connection safety, verify required tables are present in the public schema, and check Databricks API parameters.
+
 ## Known Limitations
 
 - Phase 6 validated table/query readiness but did not visually validate the Next.js UI against the live SQL Warehouse.

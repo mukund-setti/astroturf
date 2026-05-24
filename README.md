@@ -189,7 +189,38 @@ To ensure seamless upgrades, existing setups configured with `ASTROTURF_ENABLE_J
 
 ---
 
-## 9. Live Databricks Validation
+## 9. Production Control Plane (PostgreSQL)
+
+In hosted production environments (`ASTROTURF_DEPLOYMENT_MODE=production`), Astroturf operates a durable **PostgreSQL control plane** instead of using unstable server-local JSON file stores.
+
+This architecture ensures high availability, statelessness for serverless deployments (such as Vercel), and transactional consistency across concurrent operations.
+
+### Configuration
+Set the following environment variables to activate PostgreSQL durable storage:
+```bash
+# Enforce production mode (disables all local JSON fallback operations)
+ASTROTURF_DEPLOYMENT_MODE=production
+
+# Provide standard PostgreSQL connection URL (e.g. Neon, Supabase, Railway)
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require
+```
+
+### Schema & Migrations
+Database table definitions are located under `ui/db/migrations/001_initial_control_plane.sql`. Execute this migration SQL directly on your hosted PostgreSQL instance before booting the application:
+```bash
+psql -d "DATABASE_URL" -f ui/db/migrations/001_initial_control_plane.sql
+```
+
+### Production Environment Verification
+Verify that your database connection, SQL schemas, required tables, and Databricks variables are configured and healthy before deployment:
+```powershell
+cd ui
+npm run check-env
+```
+
+---
+
+## 10. Live Databricks Validation
 
 Phase 6 live-validated the production path inside Databricks Serverless notebook tasks for a controlled 500-comment FCC `17-108` slice. Run IDs: load sample `916653215561127`, embed `546125942192140`, Vector Search cluster `1028362756517371`, export `156035613634033`.
 
@@ -199,7 +230,7 @@ The Next.js UI now supports `ASTROTURF_DATA_MODE=mock | live | auto`. Local revi
 
 ---
 
-## 10. Astroturf Autopilot: Proactive Monitoring & Watchlist Abstraction
+## 11. Astroturf Autopilot: Proactive Monitoring & Watchlist Abstraction
 
 Astroturf has been transformed from a manual ingestion queue into a proactive regulatory intelligence platform. Users search topics, keywords, or agencies, and the platform proactively discovers, classifies, prioritizes, and monitors rulemaking activities.
 
@@ -219,7 +250,7 @@ Astroturf has been transformed from a manual ingestion queue into a proactive re
 
 ---
 
-## 11. Honest Limitations & Future Work
+## 12. Honest Limitations & Future Work
 
 * **Temporal Scoping Bias**: Current local tests run over short 3-day comment submission bursts. Future work will scale to multi-month timeframes.
 * **Permitted Bulk Filings**: The system flags coordinates campaigns but cannot distinguish authorized citizen petitions from fraudulent identity thefts without third-party advocacy registry lookups.

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { query, isOfflineMode, getCatalog } from "./databricks";
+import { query as pgQuery } from "./db";
+import { query as queryDb, isOfflineMode, getCatalog } from "./databricks";
 
 export interface DiscoveredDocket {
   docket_id: string;
@@ -22,9 +23,21 @@ export interface DiscoveredDocket {
   updated_at: string;
 }
 
+const isProduction = process.env.ASTROTURF_DEPLOYMENT_MODE === "production";
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
+
+// Fail loudly in production if DATABASE_URL is missing
+if (isProduction && !hasDatabaseUrl) {
+  throw new Error("CRITICAL CONFIGURATION ERROR: Missing required environment variable 'DATABASE_URL' in production deployment mode. Production requires PostgreSQL state storage.");
+}
+
+const useDb = isProduction || hasDatabaseUrl;
+
 const LOCAL_CATALOG_PATH = path.resolve(process.cwd(), "..", "data", "discovery", "docket_catalog.json");
 
 function ensureCatalogDirectory(): void {
+  if (isProduction) return;
+
   try {
     const dir = path.dirname(LOCAL_CATALOG_PATH);
     if (!fs.existsSync(dir)) {
@@ -38,36 +51,43 @@ function ensureCatalogDirectory(): void {
   }
 }
 
+/**
+ * List all discovered and monitored rulemaking dockets
+ */
 export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
-  const offline = isOfflineMode();
-  
-  if (!offline) {
-    // Production Mode: Query Databricks SQL Warehouse
+  if (useDb) {
     try {
-      const catalog = getCatalog();
-      const sql = `SELECT * FROM ${catalog}.discovery.docket_catalog ORDER BY priority_score DESC`;
-      const rows = await query<Record<string, unknown>>(sql);
-      return rows.map((r) => ({
-        docket_id: r.docket_id as string,
-        source: r.source as "regulations_gov" | "ecfs",
-        agency_id: r.agency_id as string,
-        topic_id: r.topic_id as string,
-        title: r.title as string,
-        summary: r.summary as string,
-        status: r.status as DiscoveredDocket["status"],
-        comment_count_estimate: Number(r.comment_count_estimate ?? 0),
-        last_comment_date: r.last_comment_date ? new Date(r.last_comment_date as string).toISOString() : null,
-        last_ingested_at: r.last_ingested_at ? new Date(r.last_ingested_at as string).toISOString() : null,
-        last_analyzed_at: r.last_analyzed_at ? new Date(r.last_analyzed_at as string).toISOString() : null,
-        freshness_label: (r.freshness_label as string) ?? "Active",
-        priority_score: Number(r.priority_score ?? 0.0),
-        user_requested_count: Number(r.user_requested_count ?? 0),
-        tags: r.tags ? (r.tags as string).split(",").map((s: string) => s.trim()) : [],
-        created_at: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
-        updated_at: r.updated_at ? new Date(r.updated_at as string).toISOString() : new Date().toISOString(),
-      }));
+      const rows = await pgQuery<Record<string, unknown>>(
+        "SELECT * FROM docket_catalog ORDER BY priority_score DESC"
+      );
+      if (rows.length > 0) {
+        return rows.map(mapRowToDocket);
+      }
+
+      // If Postgres cache is empty, we check if Databricks credentials exist to sync
+      const offline = isOfflineMode();
+      if (!offline) {
+        try {
+          const catalog = getCatalog();
+          const sql = `SELECT * FROM ${catalog}.discovery.docket_catalog ORDER BY priority_score DESC`;
+          const dbRows = await queryDb<Record<string, unknown>>(sql);
+          const mapped = dbRows.map(mapDbRowToDocket);
+
+          // Seed/cache the discovered dockets into the PostgreSQL database
+          for (const docket of mapped) {
+            await registerDiscoveredDocket(docket);
+          }
+          return mapped;
+        } catch (dbErr) {
+          console.warn("Failed to read docket_catalog from Databricks SQL:", dbErr);
+        }
+      }
+
+      // Production mode does not load local JSON quickseeds
+      return [];
     } catch (err) {
-      console.warn("Failed to query docket catalog from Databricks SQL. Falling back to local catalog JSON.", err);
+      console.error("Failed to query docket catalog from PostgreSQL:", err);
+      if (isProduction) throw err;
     }
   }
 
@@ -95,17 +115,90 @@ export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
   }
 }
 
+/**
+ * Get a specific discovered docket by ID
+ */
 export async function getDiscoveredDocket(docketId: string): Promise<DiscoveredDocket | null> {
+  if (useDb) {
+    try {
+      const rows = await pgQuery<Record<string, unknown>>(
+        "SELECT * FROM docket_catalog WHERE LOWER(docket_id) = LOWER($1)",
+        [docketId]
+      );
+      if (rows.length === 0) return null;
+      return mapRowToDocket(rows[0]);
+    } catch (err) {
+      console.error(`Failed to get docket ${docketId} from PostgreSQL:`, err);
+      if (isProduction) throw err;
+    }
+  }
+
   const list = await listDiscoveredDockets();
   return list.find((d) => d.docket_id.toLowerCase() === docketId.toLowerCase()) || null;
 }
 
+/**
+ * Register or update a docket in the discovered dockets catalog (idempotent ON CONFLICT)
+ */
 export async function registerDiscoveredDocket(docket: Partial<DiscoveredDocket>): Promise<DiscoveredDocket> {
+  const now = new Date().toISOString();
+
+  if (useDb) {
+    try {
+      const rows = await pgQuery(
+        `INSERT INTO docket_catalog (
+          docket_id, source, agency_id, topic_id, title, summary, status,
+          comment_count_estimate, last_comment_date, last_ingested_at, last_analyzed_at,
+          freshness_label, priority_score, user_requested_count, tags_json, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ON CONFLICT (docket_id) DO UPDATE SET
+          source = EXCLUDED.source,
+          agency_id = EXCLUDED.agency_id,
+          topic_id = EXCLUDED.topic_id,
+          title = EXCLUDED.title,
+          summary = EXCLUDED.summary,
+          status = EXCLUDED.status,
+          comment_count_estimate = EXCLUDED.comment_count_estimate,
+          last_comment_date = EXCLUDED.last_comment_date,
+          last_ingested_at = EXCLUDED.last_ingested_at,
+          last_analyzed_at = EXCLUDED.last_analyzed_at,
+          freshness_label = EXCLUDED.freshness_label,
+          priority_score = EXCLUDED.priority_score,
+          user_requested_count = EXCLUDED.user_requested_count,
+          tags_json = EXCLUDED.tags_json,
+          updated_at = EXCLUDED.updated_at
+        RETURNING *`,
+        [
+          docket.docket_id!,
+          docket.source || "regulations_gov",
+          docket.agency_id || "FTC",
+          docket.topic_id || "unclassified",
+          docket.title || "Short Title",
+          docket.summary || "",
+          docket.status || "discovered",
+          docket.comment_count_estimate || 0,
+          docket.last_comment_date || null,
+          docket.last_ingested_at || null,
+          docket.last_analyzed_at || null,
+          docket.freshness_label || "Active",
+          docket.priority_score || 0.0,
+          docket.user_requested_count || 0,
+          JSON.stringify(docket.tags || []),
+          now,
+          now,
+        ]
+      );
+      return mapRowToDocket(rows[0]);
+    } catch (err) {
+      console.error("Failed to insert/upsert discovered docket in PostgreSQL:", err);
+      throw err;
+    }
+  }
+
+  // Local Dev Fallback: Write local JSON file
   ensureCatalogDirectory();
   const list = await listDiscoveredDockets();
   const index = list.findIndex((d) => d.docket_id === docket.docket_id);
-  
-  const now = new Date().toISOString();
   
   const newDocket: DiscoveredDocket = {
     docket_id: docket.docket_id!,
@@ -133,7 +226,6 @@ export async function registerDiscoveredDocket(docket: Partial<DiscoveredDocket>
     list.push(newDocket);
   }
 
-  // Save to local JSON
   fs.writeFileSync(
     LOCAL_CATALOG_PATH,
     JSON.stringify(
@@ -147,6 +239,9 @@ export async function registerDiscoveredDocket(docket: Partial<DiscoveredDocket>
   return newDocket;
 }
 
+/**
+ * Increment requests count for a discovered rulemaking (idempotent priority updates)
+ */
 export async function incrementUserRequestCount(docketId: string): Promise<DiscoveredDocket | null> {
   const docket = await getDiscoveredDocket(docketId);
   if (!docket) return null;
@@ -161,4 +256,62 @@ export async function incrementUserRequestCount(docketId: string): Promise<Disco
   docket.priority_score = Math.min(100.0, Math.round(scaleScore + interestScore + recencyScore + agencyScore));
 
   return await registerDiscoveredDocket(docket);
+}
+
+/**
+ * Maps a PostgreSQL database row to DiscoveredDocket TypeScript interface
+ */
+function mapRowToDocket(row: Record<string, unknown>): DiscoveredDocket {
+  let tags: string[] = [];
+  try {
+    tags = Array.isArray(row.tags_json) ? (row.tags_json as string[]) : JSON.parse((row.tags_json as string) || "[]");
+  } catch {
+    tags = row.tags_json ? String(row.tags_json).split(",").map((s) => s.trim()) : [];
+  }
+
+  return {
+    docket_id: row.docket_id as string,
+    source: row.source as "regulations_gov" | "ecfs",
+    agency_id: row.agency_id as string,
+    topic_id: row.topic_id as string,
+    title: row.title as string,
+    summary: (row.summary as string) || "",
+    status: row.status as DiscoveredDocket["status"],
+    comment_count_estimate: Number(row.comment_count_estimate ?? 0),
+    last_comment_date: row.last_comment_date ? new Date(row.last_comment_date as string).toISOString() : null,
+    last_ingested_at: row.last_ingested_at ? new Date(row.last_ingested_at as string).toISOString() : null,
+    last_analyzed_at: row.last_analyzed_at ? new Date(row.last_analyzed_at as string).toISOString() : null,
+    freshness_label: (row.freshness_label as string) ?? "Active",
+    priority_score: Number(row.priority_score ?? 0.0),
+    user_requested_count: Number(row.user_requested_count ?? 0),
+    tags,
+    created_at: new Date(row.created_at as string).toISOString(),
+    updated_at: new Date(row.updated_at as string).toISOString(),
+  };
+}
+
+/**
+ * Maps Databricks SQL Warehouse row format to local DiscoveredDocket interface
+ */
+function mapDbRowToDocket(r: Record<string, unknown>): DiscoveredDocket {
+  const tagsStr = r.tags ? String(r.tags) : "";
+  return {
+    docket_id: r.docket_id as string,
+    source: r.source as "regulations_gov" | "ecfs",
+    agency_id: r.agency_id as string,
+    topic_id: r.topic_id as string,
+    title: r.title as string,
+    summary: r.summary as string,
+    status: r.status as DiscoveredDocket["status"],
+    comment_count_estimate: Number(r.comment_count_estimate ?? 0),
+    last_comment_date: r.last_comment_date ? new Date(r.last_comment_date as string).toISOString() : null,
+    last_ingested_at: r.last_ingested_at ? new Date(r.last_ingested_at as string).toISOString() : null,
+    last_analyzed_at: r.last_analyzed_at ? new Date(r.last_analyzed_at as string).toISOString() : null,
+    freshness_label: (r.freshness_label as string) ?? "Active",
+    priority_score: Number(r.priority_score ?? 0.0),
+    user_requested_count: Number(r.user_requested_count ?? 0),
+    tags: tagsStr ? tagsStr.split(",").map((s) => s.trim()) : [],
+    created_at: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
+    updated_at: r.updated_at ? new Date(r.updated_at as string).toISOString() : new Date().toISOString(),
+  };
 }
