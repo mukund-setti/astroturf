@@ -1,0 +1,57 @@
+{
+  "docket_id": "17-108",
+  "cluster_id": "96413d57e367d1abc8cec9a73ac260017105fa797802ba319eb300015444817c",
+  "cluster_size": 1002,
+  "representative_comment_id": "10828445130115",
+  "representative_comment": "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai’s proposal to hand the government-subsidized telecom giants like AT&T, Verizon, and Comcast free rein to create Internet fast lanes, stripping Internet users of the necessary privacy and access rules we demanded and just recently won. \r\n\r\nI’m afraid of a “pay-to-play” Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the existing net neutrality rules mean that Internet providers can’t slow or block customers’ ability to see certain web services or create Internet “fast lanes” by charging online services and websites more money to reach customers faster. That’s exactly the right balance to make sure competition in the Internet space is fair and benefits consumers and small businesses as well as larger players. Pai’s proposed repeal of the rules would transform ISPs into gatekeepers with an effective veto right on expression and innovation. That’s contrary to the basic precepts on which the Internet was built. \r\n\r\nIt Means Everything to me. \r\n\r\nThank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
+  "embedding_model": "BAAI/bge-large-en-v1.5",
+  "similarity_threshold": 0.92,
+  "confidence_score": 0.8210063020336104,
+  "temporal_coordination_score": 0.7400495735066894,
+  "mean_similarity": 0.9424413948239918,
+  "min_similarity": 0.8358231782913208,
+  "max_similarity": 0.9999998807907104,
+  "source_metadata": {
+    "source": "ECFS",
+    "ingested_window_start": "2017-08-28 17:00:02 UTC",
+    "ingested_window_end": "2017-08-28 19:00:02 UTC"
+  },
+  "top_repeated_phrases": [
+    {
+      "phrase": "That’s not the kind of Internet we want to pass on to future generations of technology users.",
+      "count": 351,
+      "percent": 0.3502994011976048
+    },
+    {
+      "phrase": "That’s contrary to the basic precepts on which the Internet was built.",
+      "count": 324,
+      "percent": 0.32335329341317365
+    },
+    {
+      "phrase": "That’s not how the Internet was built, and that's not what we want.",
+      "count": 322,
+      "percent": 0.3213572854291417
+    },
+    {
+      "phrase": "Thank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
+      "count": 277,
+      "percent": 0.27644710578842313
+    },
+    {
+      "phrase": "Thanks for protecting Internet users like me by upholding the existing Title II net neutrality rules.",
+      "count": 242,
+      "percent": 0.24151696606786427
+    }
+  ],
+  "filing_velocity_histogram": [
+    {
+      "time_bucket": "2017-08-28 17:00 UTC",
+      "count": 44
+    },
+    {
+      "time_bucket": "2017-08-28 19:00 UTC",
+      "count": 958
+    }
+  ],
+  "generated_at": "2026-05-24 05:11:59 UTC"
+}

@@ -5,12 +5,19 @@ A multi-agent system that detects coordinated public comment campaigns in federa
 
 ## Architecture (authoritative: docs/architecture.md)
 Six agents over a medallion lakehouse:
-- IngestionAgent: regulations.gov v4 API -> bronze.raw_comments
-- ParserAgent: bronze -> silver.parsed_comments (LLM for PDF/scanned attachments)
+- IngestionAgent: multi-source (regulations.gov v4 + FCC ECFS public API) -> bronze.raw_comments. See ADR-0012.
+- ParserAgent: bronze -> silver.parsed_comments (LLM for PDF/scanned attachments). Source-aware: ECFS rows skip detail-fetch + HTML stripping.
 - EmbeddingAgent: silver -> silver.comment_embeddings (Databricks Foundation Model API: databricks-bge-large-en)
 - ClusteringAgent: vectors -> gold.comment_clusters (MinHash/LSH candidate generation, cosine confirmation)
 - AttributionAgent: clusters -> gold.campaign_attributions (tool-using LLM agent: web search + advocacy registry lookup)
 - MigrationAgent: clusters x final rule text -> gold.rule_migrations (phrase-level similarity, section-level citations)
+
+## API keys
+Both regulations.gov and FCC ECFS are fronted by api.data.gov and accept the same key.
+- Canonical env var: `DATA_GOV_API_KEY`.
+- Deprecated fallback: `REGULATIONS_GOV_API_KEY`. Logs a one-time warning on use.
+- Resolution lives in `shared/api_keys.py::resolve_data_gov_api_key`.
+- ECFS docket conventions: pass the bare proceeding name (e.g. `17-108`, not `WC-17-108`). See docs/ecfs-setup.md.
 
 Agents communicate via Delta tables, not in-memory message passing. Each agent is idempotent on its primary key and independently replayable.
 
@@ -62,8 +69,12 @@ Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR 
 - Debug UI exists for bronze / silver / details / attachments inspection.
 - Latest test status: 76 unit tests passing, Ruff clean, Ruff format clean.
 
+- **Phase 8 AttributionAgent + MigrationAgent MVPs complete (offline only)**: Implemented `AttributionAgent` (`offline_seed` mode, ADR-0015) and `MigrationAgent` (`local_text` mode, ADR-0015) as evidence-packet producers, not accusation generators. Schemas `gold.campaign_attributions` and `gold.rule_migrations` follow the Pydantic+pyarrow+pyspark pattern; `confidence_score` is hard-capped strictly below 1.0; `MigrationAgent` rows require non-empty `caveat_text`; `web_research` / `llm_assisted` / `federal_register_api` modes are wired but refuse to run until follow-up ADRs configure them. Curated FCC `17-108` seed registry and a clearly-labelled final-rule excerpt fixture live under `evals/fixtures/`. The campaign-detail UI gains "Likely Campaign Origin" and "Language Migration Check" sections that fall back to "Not yet analyzed" + CLI command when data is absent. Export pipeline (`scripts/export_to_demo_table.py`) gains nullable attribution/migration join columns; absence does not break the export. Methodology doc: `docs/attribution-and-migration-methodology.md`.
+- **`processing_status` taxonomy reconciled**: `scripts/run_docket_pipeline.py` now exposes `ALLOWED_PROCESSING_STATUSES = {configured_awaiting_run, queued, partially_processed, baseline_only, analyzed}` as the single source of truth. The new tier `configured_awaiting_run` accurately describes dockets registered via `/analyze` or in `configs/dockets.yaml` that have not been run. Status-to-UI-label mapping documented in `docs/product-vision.md` and `docs/ui-information-architecture.md`; runbook references the validator. Phase 5 tests updated to match the new reality. `ui/app/analyze/page.tsx` YAML snippet now emits `processing_status: "configured_awaiting_run"` so generated config validates round-trip.
+- **Interactive `/analyze` Ingestion and Orchestration Runner**: Fully wired the Next.js frontend with local server capabilities. An endpoint `/api/analyze/register` appends new docket configurations directly to `configs/dockets.yaml` (safely checking for existing registrations first), and spawns the unified pipeline runner `scripts/run_docket_pipeline.py` in the background with local execution settings and comment limits, streaming console output to `data/logs/pipeline-<id>.log` automatically. Users can register and trigger pipeline runs directly from the browser with zero manual CLI steps.
+- Latest test status: **169 backend tests passing**, Ruff clean, Ruff format clean. UI production build passes via `npm run build` in mock mode.
+
 ### Next priorities
-1. Write `docs/system-map.md` and `docs/demo-story.md` so the project narrative is legible end-to-end.
-2. Run the Databricks Foundation Model backend on a Databricks-flavored path once live workspace access is explicitly approved.
-3. Build the first ClusteringAgent prototype over the embeddings.
-4. Later: attachment text extraction (ParserAgent v2B phases 2-4) and Databricks Vector Search integration.
+1. Run AttributionAgent + MigrationAgent against the live FCC `17-108` clustered slice end-to-end and capture a reviewer dossier.
+2. ADR + implementation for `web_research` (AttributionAgent) and `federal_register_api` (MigrationAgent) modes — gated behind tooling configuration and explicit user approval.
+3. Later: attachment text extraction (ParserAgent v2B phases 2-4) and expanded production Vector Search evaluation/recall tuning.

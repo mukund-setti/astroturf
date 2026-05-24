@@ -1,0 +1,19 @@
+{
+  "docket_id": "17-108",
+  "sample_size": 4993,
+  "semantic_evaluated_size": 4993,
+  "exact_hash_clusters": 68,
+  "semantic_clusters": 66,
+  "exact_hash_covered_comments": 318,
+  "semantic_covered_comments": 314,
+  "exact_hash_coverage_percent": 6.3689164830763065,
+  "semantic_coverage_percent": 6.288804326056479,
+  "lift_ratio": 0.9874213836477987,
+  "runtime_exact_hash": 0.5150000000001,
+  "runtime_semantic_clustering": 5.625,
+  "runtime_total": 10.437000000000126,
+  "theoretical_pairwise_evals": 4999950000,
+  "theoretical_ram_gb": 37.25290298461914,
+  "theoretical_cpu_hours": 2.7777499999999997,
+  "generated_at": "2026-05-24 05:20:08 UTC"
+}

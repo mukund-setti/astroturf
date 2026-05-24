@@ -276,8 +276,19 @@ if task in ("all", "cluster"):
     dbutils.widgets.text("clustering_max_rows", "", "Max rows (blank = all)")
     dbutils.widgets.text(
         "clustering_version",
-        "v1_connected_components_cosine",
+        "v1_vector_search_cosine",
         "Clustering version tag",
+    )
+    dbutils.widgets.dropdown(
+        "clustering_mode",
+        "vector_search",
+        ["vector_search", "local"],
+        "Candidate retrieval mode",
+    )
+    dbutils.widgets.text(
+        "vector_index_name",
+        f"{catalog}.silver.comment_embeddings_bge_large_index",
+        "Vector Search index name",
     )
     dbutils.widgets.dropdown(
         "allow_mock",
@@ -292,6 +303,8 @@ if task in ("all", "cluster"):
     _cmax_str = dbutils.widgets.get("clustering_max_rows").strip()
     clustering_max_rows = int(_cmax_str) if _cmax_str else None
     clustering_version = dbutils.widgets.get("clustering_version")
+    clustering_mode = dbutils.widgets.get("clustering_mode")
+    vector_index_name = dbutils.widgets.get("vector_index_name").strip() or None
     allow_mock = dbutils.widgets.get("allow_mock").lower() == "true"
 
     from agents.clustering.agent import ClusteringAgent, ClusteringInput
@@ -309,6 +322,8 @@ if task in ("all", "cluster"):
             min_cluster_size=min_cluster_size,
             max_rows=clustering_max_rows,
             allow_mock=allow_mock,
+            clustering_mode=clustering_mode,
+            vector_index_name=vector_index_name,
         )
     )
 

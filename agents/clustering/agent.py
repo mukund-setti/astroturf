@@ -55,6 +55,11 @@ class ClusteringInput:
     min_cluster_size: int = DEFAULT_MIN_CLUSTER_SIZE
     max_rows: int | None = None
     allow_mock: bool = False
+    clustering_mode: str = "local"
+    vector_index_name: str | None = None
+    vector_endpoint_name: str = "astroturf-vs-endpoint"
+    vector_search_limit: int = 100
+    vector_search_client: Any | None = None
 
 
 @dataclass
@@ -94,6 +99,7 @@ class ClusteringAgent:
         embedding_backend = ""
         clustering_run_id = ""
 
+        mode = "local"
         try:
             candidates, candidates_total, candidates_after_mock_filter = (
                 self._load_candidates(inputs)
@@ -102,26 +108,123 @@ class ClusteringAgent:
             embedding_backend = self._resolve_embedding_backend(candidates)
             clustering_run_id = _clustering_run_id(inputs, candidates)
 
-            vectors = _normalized_matrix(candidates)
             components: list[list[int]] = []
-            if rows_clustered:
-                similarities = vectors @ vectors.T
-                pair_count_evaluated = rows_clustered * (rows_clustered - 1) // 2
-                edges = _edges_at_threshold(similarities, inputs.similarity_threshold)
-                edge_count = len(edges)
-                components = [
-                    component
-                    for component in _connected_components(rows_clustered, edges)
-                    if len(component) >= inputs.min_cluster_size
-                ]
-                clusters, memberships = self._build_output_rows(
-                    inputs=inputs,
-                    candidates=candidates,
-                    similarities=similarities,
-                    components=components,
-                    embedding_backend=embedding_backend,
-                    clustering_run_id=clustering_run_id,
-                )
+            if inputs.clustering_mode == "vector_search":
+                mode = "vector_search"
+                if rows_clustered:
+                    vsc = inputs.vector_search_client
+                    if vsc is None:
+                        from databricks.vector_search.client import VectorSearchClient
+
+                        vsc = VectorSearchClient()
+
+                    index_name = inputs.vector_index_name
+                    if not index_name:
+                        raise ValueError(
+                            "vector_index_name is required when "
+                            "clustering_mode='vector_search'"
+                        )
+                    log.info(
+                        "Querying Vector Search index=%s endpoint=%s",
+                        index_name,
+                        inputs.vector_endpoint_name,
+                    )
+                    index = vsc.get_index(
+                        endpoint_name=inputs.vector_endpoint_name,
+                        index_name=index_name,
+                    )
+
+                    id_to_idx = {
+                        row["comment_id"]: i for i, row in enumerate(candidates)
+                    }
+                    edges: list[tuple[int, int]] = []
+                    sparse_similarities: dict[tuple[int, int], float] = {}
+
+                    for i, row in enumerate(candidates):
+                        query_vector = row["embedding_vector"]
+                        results_payload = index.similarity_search(
+                            query_vector=query_vector,
+                            columns=["comment_id"],
+                            num_results=inputs.vector_search_limit,
+                        )
+
+                        data = (results_payload.get("result") or {}).get(
+                            "data_array"
+                        ) or []
+                        manifest = results_payload.get("manifest") or {}
+                        cols = [c["name"] for c in manifest.get("columns", [])]
+
+                        try:
+                            cid_col_idx = cols.index("comment_id")
+                            score_col_idx = cols.index("score")
+                        except ValueError:
+                            cid_col_idx = 0
+                            score_col_idx = 1 if len(cols) > 1 else -1
+
+                        for neighbor_row in data:
+                            if not neighbor_row:
+                                continue
+                            neighbor_id = str(neighbor_row[cid_col_idx])
+                            score = (
+                                float(neighbor_row[score_col_idx])
+                                if score_col_idx != -1
+                                else 1.0
+                            )
+
+                            if neighbor_id in id_to_idx:
+                                j = id_to_idx[neighbor_id]
+                                if i == j:
+                                    continue
+                                if score >= inputs.similarity_threshold:
+                                    u, v_node = min(i, j), max(i, j)
+                                    pair_key = (u, v_node)
+                                    if pair_key not in sparse_similarities:
+                                        sparse_similarities[pair_key] = score
+                                        edges.append(pair_key)
+
+                    edge_count = len(edges)
+                    components = [
+                        component
+                        for component in _connected_components(rows_clustered, edges)
+                        if len(component) >= inputs.min_cluster_size
+                    ]
+
+                    def get_similarity(x: int, y: int) -> float:
+                        if x == y:
+                            return 1.0
+                        key = (min(x, y), max(x, y))
+                        return sparse_similarities.get(key, 0.0)
+
+                    clusters, memberships = self._build_sparse_output_rows(
+                        inputs=inputs,
+                        candidates=candidates,
+                        get_similarity=get_similarity,
+                        components=components,
+                        embedding_backend=embedding_backend,
+                        clustering_run_id=clustering_run_id,
+                    )
+            else:
+                vectors = _normalized_matrix(candidates)
+                if rows_clustered:
+                    similarities = vectors @ vectors.T
+                    pair_count_evaluated = rows_clustered * (rows_clustered - 1) // 2
+                    edges = _edges_at_threshold(
+                        similarities, inputs.similarity_threshold
+                    )
+                    edge_count = len(edges)
+                    components = [
+                        component
+                        for component in _connected_components(rows_clustered, edges)
+                        if len(component) >= inputs.min_cluster_size
+                    ]
+                    clusters, memberships = self._build_output_rows(
+                        inputs=inputs,
+                        candidates=candidates,
+                        similarities=similarities,
+                        components=components,
+                        embedding_backend=embedding_backend,
+                        clustering_run_id=clustering_run_id,
+                    )
 
             deleted_clusters = delete_clustering_scope(
                 inputs.clusters_path,
@@ -177,11 +280,20 @@ class ClusteringAgent:
                 "largest_cluster_size": largest_cluster_size,
                 "mean_cluster_size": mean_cluster_size,
                 "duration_seconds": duration,
+                "runtime_seconds": duration,
                 "embedding_model": inputs.embedding_model,
                 "embedding_backend": embedding_backend,
                 "clustering_version": inputs.clustering_version,
                 "similarity_threshold": inputs.similarity_threshold,
                 "clustering_run_id": clustering_run_id,
+                "mode": mode,
+                "vector_index_name": inputs.vector_index_name or "",
+                "threshold": inputs.similarity_threshold,
+                "comments_considered": rows_clustered,
+                "clusters_found": len(clusters),
+                "coverage": (
+                    len(memberships) / rows_clustered if rows_clustered else 0.0
+                ),
             }
             _log_mlflow(inputs, metadata)
 
@@ -209,6 +321,14 @@ class ClusteringAgent:
             raise ValueError("min_cluster_size must be at least 2")
         if inputs.max_rows is not None and inputs.max_rows < 1:
             raise ValueError("max_rows must be positive when provided")
+        if inputs.clustering_mode not in {"local", "vector_search"}:
+            raise ValueError("clustering_mode must be 'local' or 'vector_search'")
+        if inputs.clustering_mode == "vector_search" and not inputs.vector_index_name:
+            raise ValueError(
+                "vector_index_name is required when clustering_mode='vector_search'"
+            )
+        if inputs.vector_search_limit < 2:
+            raise ValueError("vector_search_limit must be at least 2")
         if not DeltaTable.is_deltatable(inputs.embeddings_path):
             raise FileNotFoundError(
                 f"Embeddings Delta table not found at {inputs.embeddings_path}. "
@@ -302,6 +422,83 @@ class ClusteringAgent:
             ranked = sorted(
                 (
                     (idx, float(similarities[representative_idx, idx]))
+                    for idx in component
+                ),
+                key=lambda item: (-item[1], candidates[item[0]]["comment_id"]),
+            )
+            for rank, (idx, sim) in enumerate(ranked, start=1):
+                row = candidates[idx]
+                memberships.append(
+                    CommentClusterMembership(
+                        cluster_id=cluster_id,
+                        comment_id=row["comment_id"],
+                        clustering_run_id=clustering_run_id,
+                        docket_id=inputs.docket_id,
+                        embedding_model=inputs.embedding_model,
+                        embedding_backend=embedding_backend,
+                        clustering_version=inputs.clustering_version,
+                        similarity_threshold=inputs.similarity_threshold,
+                        text_hash=row["text_hash"],
+                        text_source=row["text_source"],
+                        similarity_to_representative=sim,
+                        membership_rank=rank,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+
+        clusters.sort(key=lambda cluster: cluster.cluster_id)
+        memberships.sort(key=lambda row: (row.cluster_id, row.membership_rank))
+        return clusters, memberships
+
+    def _build_sparse_output_rows(
+        self,
+        *,
+        inputs: ClusteringInput,
+        candidates: list[dict[str, Any]],
+        get_similarity: Any,
+        components: list[list[int]],
+        embedding_backend: str,
+        clustering_run_id: str,
+    ) -> tuple[list[CommentCluster], list[CommentClusterMembership]]:
+        now = datetime.now(timezone.utc)
+        clusters: list[CommentCluster] = []
+        memberships: list[CommentClusterMembership] = []
+        candidate_count = len(candidates)
+
+        for component in components:
+            component = sorted(component, key=lambda idx: candidates[idx]["comment_id"])
+            representative_idx = _sparse_medoid_index(get_similarity, component)
+            representative = candidates[representative_idx]
+            member_similarities = [
+                float(get_similarity(representative_idx, idx)) for idx in component
+            ]
+            cluster_id = _cluster_id(inputs, [candidates[idx] for idx in component])
+
+            clusters.append(
+                CommentCluster(
+                    cluster_id=cluster_id,
+                    clustering_run_id=clustering_run_id,
+                    docket_id=inputs.docket_id,
+                    embedding_model=inputs.embedding_model,
+                    embedding_backend=embedding_backend,
+                    clustering_version=inputs.clustering_version,
+                    similarity_threshold=inputs.similarity_threshold,
+                    candidate_count=candidate_count,
+                    cluster_size=len(component),
+                    representative_comment_id=representative["comment_id"],
+                    representative_text_hash=representative["text_hash"],
+                    mean_similarity=float(np.mean(member_similarities)),
+                    min_similarity=float(np.min(member_similarities)),
+                    max_similarity=float(np.max(member_similarities)),
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+            ranked = sorted(
+                (
+                    (idx, float(get_similarity(representative_idx, idx)))
                     for idx in component
                 ),
                 key=lambda item: (-item[1], candidates[item[0]]["comment_id"]),
@@ -479,6 +676,12 @@ def _log_mlflow(inputs: ClusteringInput, metadata: dict[str, Any]) -> None:
         mlflow.log_param("min_cluster_size", inputs.min_cluster_size)
         mlflow.log_param("max_rows", inputs.max_rows)
         mlflow.log_param("allow_mock", inputs.allow_mock)
+        mlflow.log_param("mode", metadata.get("mode", "local"))
+        mlflow.log_param("clustering_mode", inputs.clustering_mode)
+        if metadata.get("mode") == "vector_search":
+            mlflow.log_param("vector_index_name", metadata["vector_index_name"])
+            mlflow.log_param("vector_endpoint_name", inputs.vector_endpoint_name)
+            mlflow.log_param("vector_search_limit", inputs.vector_search_limit)
         if metadata.get("embedding_backend"):
             mlflow.log_param("embedding_backend", metadata["embedding_backend"])
         if metadata.get("clustering_run_id"):
@@ -496,6 +699,24 @@ def _log_mlflow(inputs: ClusteringInput, metadata: dict[str, Any]) -> None:
             "deleted_memberships",
             "largest_cluster_size",
             "mean_cluster_size",
+            "coverage",
             "duration_seconds",
+            "runtime_seconds",
         ):
             mlflow.log_metric(key, metadata[key])
+        mlflow.log_metric("threshold", metadata["threshold"])
+        mlflow.log_metric("comments_considered", metadata["comments_considered"])
+        mlflow.log_metric("clusters_found", metadata["clusters_found"])
+
+
+def _sparse_medoid_index(get_similarity: Any, component: list[int]) -> int:
+    best_idx = component[0]
+    best_mean = -1.0
+    for idx in component:
+        mean_similarity = float(
+            np.mean([get_similarity(idx, other) for other in component])
+        )
+        if mean_similarity > best_mean:
+            best_mean = mean_similarity
+            best_idx = idx
+    return best_idx

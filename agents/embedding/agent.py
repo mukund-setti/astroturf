@@ -47,7 +47,13 @@ DEFAULT_BATCH_SIZE = 32
 
 # text_source values that the EmbeddingAgent considers substantive (Q1 of the
 # planning round). Cover notes / title-only / missing are deliberately excluded.
-SUBSTANTIVE_TEXT_SOURCES: tuple[str, ...] = ("detail_comment_text", "comment_text")
+# "ecfs_text_data" is the ECFS-source counterpart of regulations.gov's
+# "comment_text" / "detail_comment_text" — see ADR-0012.
+SUBSTANTIVE_TEXT_SOURCES: tuple[str, ...] = (
+    "detail_comment_text",
+    "comment_text",
+    "ecfs_text_data",
+)
 
 
 @dataclass
@@ -331,6 +337,8 @@ class EmbeddingAgent:
 
     def run(self, inputs: EmbeddingInput) -> EmbeddingOutput:
         start_time = time.monotonic()
+        if inputs.batch_size < 1:
+            raise ValueError("batch_size must be at least 1")
 
         # Databricks BGE backend safety: default batch size 32 is prone to hangs on the server serving endpoint.
         # Force a safe default of 16 if the backend is Databricks and the batch size is the system-wide default.
@@ -411,8 +419,24 @@ class EmbeddingAgent:
 
             to_embed.append(row)
 
+        # Defensive in-memory deduplication of the to_embed list by comment_id
+        seen_embed_ids = set()
+        deduped_to_embed = []
+        for r in to_embed:
+            cid = r["comment_id"]
+            if cid in seen_embed_ids:
+                log.warning(
+                    "Defensive deduplication: skipping duplicate comment_id=%s "
+                    "found in current run candidates.",
+                    cid,
+                )
+                continue
+            seen_embed_ids.add(cid)
+            deduped_to_embed.append(r)
+        to_embed = deduped_to_embed
+
         log.info(
-            "After cache + corruption filtering: %d to embed (%d cache hits, %d corrupt)",
+            "After cache + corruption + defensive filtering: %d to embed (%d cache hits, %d corrupt)",
             len(to_embed),
             skipped_cache_hit,
             skipped_corrupt,

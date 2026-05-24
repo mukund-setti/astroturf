@@ -1,0 +1,38 @@
+{
+  "docket_id": "17-108",
+  "cluster_id": "753fb0e2d898c0f0d1dbd7070b6e1fcb1a839da537e2e757b238cba2d3b75906",
+  "cluster_size": 13,
+  "representative_comment_id": "10828063717964",
+  "representative_comment": "Net neutrality has created an unreliable landscape for consumers and businesses alike. We need Congress to bring clarity to this debate.  ",
+  "embedding_model": "BAAI/bge-large-en-v1.5",
+  "similarity_threshold": 0.92,
+  "confidence_score": 1.0,
+  "temporal_coordination_score": 1.0,
+  "mean_similarity": 1.0000001192092896,
+  "min_similarity": 1.0000001192092896,
+  "max_similarity": 1.0000001192092896,
+  "source_metadata": {
+    "source": "ECFS",
+    "ingested_window_start": "2017-08-28 19:00:02 UTC",
+    "ingested_window_end": "2017-08-28 19:00:02 UTC"
+  },
+  "top_repeated_phrases": [
+    {
+      "phrase": "Net neutrality has created an unreliable landscape for consumers and businesses alike.",
+      "count": 13,
+      "percent": 1.0
+    },
+    {
+      "phrase": "We need Congress to bring clarity to this debate.",
+      "count": 13,
+      "percent": 1.0
+    }
+  ],
+  "filing_velocity_histogram": [
+    {
+      "time_bucket": "2017-08-28 19:00 UTC",
+      "count": 13
+    }
+  ],
+  "generated_at": "2026-05-24 05:11:59 UTC"
+}

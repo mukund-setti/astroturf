@@ -1,0 +1,25 @@
+{
+  "_notice": "Seed registry for AttributionAgent (offline_seed mode). Curated from this repository's own documents (docs/demo-case-study.md, docs/ecfs-setup.md, docs/repository-polish-audit.md) and from publicly reported coverage of FCC docket 17-108. Each entry is a CANDIDATE source, not a proven origin. AttributionAgent emits evidence packets, not accusations — see ADR-0015.",
+  "_schema": {
+    "entity_name": "Human-readable name of the candidate entity.",
+    "entity_type": "One of: trade_association | advocacy_group | company | unknown | other.",
+    "url": "Public URL we associate with the entity (informational only).",
+    "template_phrases": "Distinctive phrases the entity is known to have circulated; matched against cluster representative text.",
+    "notes": "Free-form context for reviewers. Not used by the matcher."
+  },
+  "docket_id": "17-108",
+  "sources": [
+    {
+      "entity_name": "Broadband for America",
+      "entity_type": "trade_association",
+      "url": "https://www.broadbandforamerica.com/",
+      "template_phrases": [
+        "The unprecedented regulatory power the Obama Administration imposed on the internet is smothering innovation, damaging the American economy and obstructing job creation.",
+        "unprecedented regulatory power the Obama Administration imposed on the internet",
+        "smothering innovation, damaging the American economy",
+        "damage the American economy, obstruct job creation"
+      ],
+      "notes": "Coalition associated with major telecom trade groups (NCTA, CTIA, USTelecom). Phrase variants drawn directly from docs/demo-case-study.md and docs/ecfs-setup.md. Use as a CANDIDATE origin only."
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+# Astroturf Unified Docket Registration Registry
+# Central configuration mapping federal rule dockets, metadata, topics, agencies, and ingestion windows.
+#
+# Allowed processing_status values (enforced by scripts/run_docket_pipeline.py
+# ALLOWED_PROCESSING_STATUSES). UI labels are documented in
+# docs/product-vision.md and docs/ui-information-architecture.md:
+#   - "configured_awaiting_run"  UI: "Configured, awaiting run"
+#   - "queued"                   UI: "Queued"
+#   - "partially_processed"      UI: "Partially processed"
+#   - "baseline_only"            UI: "Baseline only"
+#   - "analyzed"                 UI: "Analyzed"
+
+- docket_id: "17-108"
+  source: "ecfs"
+  topic_id: "telecom"
+  agency_id: "FCC"
+  title: "Restoring Internet Freedom (Net Neutrality Repeal)"
+  date_window:
+    start_date: "2017-08-28"
+    end_date: "2017-08-28"
+  ingestion_mode: "sample"
+  expected_scale: 100000
+  processing_status: "analyzed"
+  notes: "Flagship semantic benchmark-ready ECFS proceeding. 5K local sample validated; 100K+ temporal-stratified scale benchmark modeled and ready for Databricks semantic Vector Search promotion."
+
+- docket_id: "EPA-HQ-OAR-2021-0317"
+  source: "regulations_gov"
+  topic_id: "oil_and_gas"
+  agency_id: "EPA"
+  title: "Standards of Performance for New, Reconstructed, and Modified Sources and Emissions Guidelines for Existing Sources: Oil and Natural Gas Sector Climate Review"
+  date_window:
+    start_date: null
+    end_date: null
+  ingestion_mode: "full"
+  expected_scale: 396
+  processing_status: "baseline_only"
+  notes: "Oil and gas methane rulemaking. Exact-hash baseline and Databricks workflow smoke data exist; semantic clustering is not yet promoted for this docket."
+
+- docket_id: "CFPB-2016-0025"
+  source: "regulations_gov"
+  topic_id: "finance"
+  agency_id: "CFPB"
+  title: "Payday, Vehicle Title, and Certain High-Cost Installment Loans"
+  date_window:
+    start_date: null
+    end_date: null
+  ingestion_mode: "full"
+  expected_scale: 211885
+  processing_status: "configured_awaiting_run"
+  notes: "CFPB payday, title, and high-interest installment loan protections. Registered as an ingestion template only; do not imply current processed campaign results."
+
+- docket_id: "SEC-2023-0001"
+  source: "regulations_gov"
+  topic_id: "finance"
+  agency_id: "SEC"
+  title: "Digital Asset Custody Requirements for Registered Investment Advisers"
+  date_window:
+    start_date: null
+    end_date: null
+  ingestion_mode: "full"
+  expected_scale: 15000
+  processing_status: "configured_awaiting_run"
+  notes: "Digital Asset Custody Requirements for Registered Investment Advisers. Registered as an ingestion template only; no processed campaign results."

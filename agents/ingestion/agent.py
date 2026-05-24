@@ -1,17 +1,24 @@
-"""IngestionAgent — regulations.gov v4 -> bronze.raw_comments (local Delta via delta-rs).
+"""IngestionAgent — multi-source -> bronze.raw_comments (local Delta via delta-rs).
 
-See docs/architecture.md and docs/decisions/0002-deltalake-for-local-bronze.md.
+Dispatches by ``IngestionInput.source``:
+
+- ``"regulations_gov"`` (default): regulations.gov v4 API, date-window cursoring
+  on ``lastModifiedDate`` to walk past the 5000-record cap.
+- ``"ecfs"``: FCC ECFS public API (``agents/ingestion/sources/ecfs.py``).
+  Offset+limit pagination, Lucene ``q=`` date filter.
+
+See docs/architecture.md, ADR-0002 (local Delta), ADR-0012 (multi-source
+bronze unification).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Iterator
+from datetime import date, datetime, timezone
+from typing import Any, Iterator, Literal
 
 import httpx
 import mlflow
@@ -23,6 +30,14 @@ from tenacity import (
     wait_exponential,
 )
 
+from agents.ingestion.sources.ecfs import (
+    DEFAULT_PAGE_SIZE as ECFS_DEFAULT_PAGE_SIZE,
+    DEFAULT_RATE_LIMIT_QPS as ECFS_DEFAULT_RATE_LIMIT_QPS,
+    ECFSClient,
+    ECFSClientConfig,
+    run_ecfs_ingestion,
+)
+from shared.api_keys import resolve_data_gov_api_key
 from shared.delta_utils.bronze import merge_comments
 from shared.schemas.comments import RawComment, raw_comment_arrow_schema
 
@@ -46,9 +61,16 @@ class CursorStalledError(RuntimeError):
 @dataclass
 class IngestionInput:
     docket_id: str
+    source: Literal["regulations_gov", "ecfs"] = "regulations_gov"
     page_size: int = PAGE_SIZE
     max_outer_iterations: int | None = None  # safety cap for tests / dry runs
     max_comments: int | None = None  # stop ingestion after at least this many comments
+    # ECFS-specific. Ignored for source="regulations_gov".
+    start_date: date | None = None
+    end_date: date | None = None
+    ecfs_page_size: int = ECFS_DEFAULT_PAGE_SIZE
+    ecfs_rate_limit_qps: float = ECFS_DEFAULT_RATE_LIMIT_QPS
+    ecfs_max_pages: int | None = None
 
 
 @dataclass
@@ -90,6 +112,7 @@ def _to_raw_comment(
     return RawComment(
         comment_id=record["id"],
         docket_id=docket_id,
+        source="regulations_gov",
         document_type=attrs.get("documentType"),
         title=attrs.get("title"),
         posted_date=_parse_dt(attrs.get("postedDate")),
@@ -146,20 +169,25 @@ class IngestionAgent:
     ) -> None:
         self.config = config or {}
         self.bronze_path: str = self.config.get("bronze_path", DEFAULT_BRONZE_PATH)
-        if http_client is None:
-            api_key = os.environ.get("REGULATIONS_GOV_API_KEY")
-            if not api_key:
-                raise RuntimeError(
-                    "REGULATIONS_GOV_API_KEY is not set. Required to fetch comments."
-                )
-            http_client = httpx.Client(
+        # http_client is source-specific; defer construction until run() when
+        # the source is known. Tests inject one explicitly.
+        self._injected_http_client = http_client
+        self._http: httpx.Client | None = http_client
+
+    def run(self, inputs: IngestionInput) -> IngestionOutput:
+        if inputs.source == "ecfs":
+            return self._run_ecfs(inputs)
+        return self._run_regulations_gov(inputs)
+
+    def _run_regulations_gov(self, inputs: IngestionInput) -> IngestionOutput:
+        if self._http is None:
+            api_key = resolve_data_gov_api_key(required=True)
+            self._http = httpx.Client(
                 base_url=API_BASE,
                 headers={"X-Api-Key": api_key},
                 timeout=30.0,
             )
-        self._http = http_client
 
-    def run(self, inputs: IngestionInput) -> IngestionOutput:
         start = time.monotonic()
         comments_fetched = 0
         comments_written = 0
@@ -168,6 +196,7 @@ class IngestionAgent:
 
         with mlflow.start_run(run_name=f"ingestion-{inputs.docket_id}"):
             mlflow.log_param("docket_id", inputs.docket_id)
+            mlflow.log_param("source", "regulations_gov")
             mlflow.log_param("page_size", inputs.page_size)
             mlflow.log_param("bronze_path", self.bronze_path)
 
@@ -283,6 +312,57 @@ class IngestionAgent:
                 "api_calls_made": api_calls,
                 "duration_seconds": duration,
             },
+        )
+
+    def _run_ecfs(self, inputs: IngestionInput) -> IngestionOutput:
+        """Ingest from FCC ECFS via offset+limit pagination + Lucene date filter."""
+        client = self.config.get("ecfs_client")
+        if client is None:
+            api_key = resolve_data_gov_api_key(required=True)
+            client = ECFSClient(
+                ECFSClientConfig(
+                    api_key=api_key,
+                    page_size=inputs.ecfs_page_size,
+                    rate_limit_qps=inputs.ecfs_rate_limit_qps,
+                ),
+                http_client=self._injected_http_client,
+            )
+
+        with mlflow.start_run(run_name=f"ingestion-ecfs-{inputs.docket_id}"):
+            mlflow.log_param("docket_id", inputs.docket_id)
+            mlflow.log_param("source", "ecfs")
+            mlflow.log_param("bronze_path", self.bronze_path)
+            mlflow.log_param("ecfs_page_size", inputs.ecfs_page_size)
+            mlflow.log_param("ecfs_rate_limit_qps", inputs.ecfs_rate_limit_qps)
+            mlflow.log_param(
+                "start_date",
+                inputs.start_date.isoformat() if inputs.start_date else None,
+            )
+            mlflow.log_param(
+                "end_date",
+                inputs.end_date.isoformat() if inputs.end_date else None,
+            )
+            mlflow.log_param("max_comments", inputs.max_comments)
+
+            metrics = run_ecfs_ingestion(
+                docket_id=inputs.docket_id,
+                bronze_path=self.bronze_path,
+                client=client,
+                start_date=inputs.start_date,
+                end_date=inputs.end_date,
+                max_comments=inputs.max_comments,
+                max_pages=inputs.ecfs_max_pages,
+            )
+
+            mlflow.log_metric("comments_fetched", metrics["comments_fetched"])
+            mlflow.log_metric("comments_written", metrics["comments_written"])
+            mlflow.log_metric("api_calls_made", metrics["api_calls_made"])
+            mlflow.log_metric("duration_seconds", metrics["duration_seconds"])
+
+        return IngestionOutput(
+            docket_id=inputs.docket_id,
+            rows_written=metrics["comments_written"],
+            metadata=metrics,
         )
 
     def _iter_pages(

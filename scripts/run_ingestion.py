@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""run_ingestion.py — CLI wrapper around IngestionAgent."""
+"""run_ingestion.py — CLI wrapper around IngestionAgent.
+
+Default source is ``regulations_gov``; pass ``--source ecfs`` with ``--docket``
+plus the optional ``--start-date`` / ``--end-date`` window to ingest from the
+FCC ECFS public API instead.
+"""
 
 import argparse
 import logging
 import os
 import sys
+from datetime import date
 
 # Allow importing absolute paths from root directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents.ingestion.agent import IngestionAgent, IngestionInput
+from shared.api_keys import resolve_data_gov_api_key
 
 
 def load_simple_env():
@@ -27,14 +34,27 @@ def load_simple_env():
                     os.environ[key] = val
 
 
+def _iso_date(value: str) -> date:
+    return date.fromisoformat(value)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run the public comments IngestionAgent."
     )
     parser.add_argument(
+        "--source",
+        choices=("regulations_gov", "ecfs"),
+        default="regulations_gov",
+        help="Source API. Default regulations_gov.",
+    )
+    parser.add_argument(
         "--docket",
         required=True,
-        help="Regulations.gov Docket ID (e.g. FDA-2013-S-0610)",
+        help=(
+            "Docket ID. For regulations.gov: e.g. EPA-HQ-OAR-2021-0317. "
+            "For ECFS: the proceeding name e.g. 17-108."
+        ),
     )
     parser.add_argument(
         "--bronze-path",
@@ -48,6 +68,30 @@ def main():
         help="Stop after reaching this many comments",
     )
     parser.add_argument(
+        "--start-date",
+        type=_iso_date,
+        default=None,
+        help="ECFS-only: lower bound on date_received (YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=_iso_date,
+        default=None,
+        help="ECFS-only: upper bound on date_received (YYYY-MM-DD).",
+    )
+    parser.add_argument(
+        "--ecfs-page-size",
+        type=int,
+        default=100,
+        help="ECFS-only: page size for /filings pagination.",
+    )
+    parser.add_argument(
+        "--ecfs-rate-limit-qps",
+        type=float,
+        default=1.0,
+        help="ECFS-only: client-side rate limit in requests/second.",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         help="Logging level (DEBUG, INFO, WARNING, ERROR)",
@@ -55,36 +99,40 @@ def main():
 
     args = parser.parse_args()
 
-    # Configure logging
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
     logging.basicConfig(
         level=log_level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
-    # Load environment
     load_simple_env()
 
-    # Verify API key
-    if not os.environ.get("REGULATIONS_GOV_API_KEY"):
+    # Verify api.data.gov key is resolvable before doing any real work.
+    try:
+        resolve_data_gov_api_key(required=True)
+    except RuntimeError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
         print(
-            "ERROR: REGULATIONS_GOV_API_KEY environment variable is not set.",
-            file=sys.stderr,
-        )
-        print(
-            "Please check your .env file or export the variable in your shell.",
+            "Set DATA_GOV_API_KEY in your .env (see docs/ecfs-setup.md).",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    print(f"Starting ingestion for docket {args.docket}...")
+    print(f"Starting {args.source} ingestion for docket {args.docket}...")
     print(f"Target Delta table path: {args.bronze_path}")
     if args.max_comments is not None:
         print(f"Max comments limit: {args.max_comments}")
+    if args.source == "ecfs" and (args.start_date or args.end_date):
+        print(f"Date window: {args.start_date} .. {args.end_date}")
 
     agent = IngestionAgent(config={"bronze_path": args.bronze_path})
     inputs = IngestionInput(
         docket_id=args.docket,
+        source=args.source,
         max_comments=args.max_comments,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        ecfs_page_size=args.ecfs_page_size,
+        ecfs_rate_limit_qps=args.ecfs_rate_limit_qps,
     )
 
     try:
@@ -93,10 +141,10 @@ def main():
         print(f"\nERROR: Ingestion failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Print summary
     print("\n" + "=" * 50)
     print("INGESTION SUMMARY")
     print("=" * 50)
+    print(f"Source:           {args.source}")
     print(f"Docket ID:        {output.docket_id}")
     print(f"Comments Fetched: {output.metadata.get('comments_fetched', 0)}")
     print(f"Comments Written: {output.rows_written}")

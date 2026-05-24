@@ -1,0 +1,33 @@
+{
+  "docket_id": "17-108",
+  "cluster_id": "73c8d60afb009ba76673e9218d60f0ef0ebaa39f421de2f1bc24040a4aeaedb3",
+  "cluster_size": 2,
+  "representative_comment_id": "108282615031038",
+  "representative_comment": "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC’s existing rules and keep broadband internet access classified under Title II.",
+  "embedding_model": "BAAI/bge-large-en-v1.5",
+  "similarity_threshold": 0.92,
+  "confidence_score": 1.0,
+  "temporal_coordination_score": 1.0,
+  "mean_similarity": 1.0000003576278687,
+  "min_similarity": 1.0000003576278687,
+  "max_similarity": 1.0000003576278687,
+  "source_metadata": {
+    "source": "ECFS",
+    "ingested_window_start": "2017-08-28 19:00:02 UTC",
+    "ingested_window_end": "2017-08-28 19:00:02 UTC"
+  },
+  "top_repeated_phrases": [
+    {
+      "phrase": "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC’s existing rules and keep broadband internet access classified under Title II.",
+      "count": 2,
+      "percent": 1.0
+    }
+  ],
+  "filing_velocity_histogram": [
+    {
+      "time_bucket": "2017-08-28 19:00 UTC",
+      "count": 2
+    }
+  ],
+  "generated_at": "2026-05-24 05:11:59 UTC"
+}

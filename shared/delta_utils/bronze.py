@@ -12,6 +12,7 @@ import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 
 from shared.delta_utils.fuse_bypass import local_tmp_delta_path
+from shared.delta_utils.silver import ensure_schema
 
 log = logging.getLogger(__name__)
 
@@ -24,8 +25,10 @@ def merge_comments(
     """Idempotent upsert of ``arrow_table`` into the Delta table at ``path``.
 
     Initialises an empty Delta table with ``arrow_table.schema`` on first call so
-    the merge always has a target. Returns the row-count operation metrics from
-    delta-rs as ``{"inserted": N, "updated": M}``.
+    the merge always has a target. Migrates older on-disk schemas additively via
+    ``ensure_schema()`` (ADR-0004) so a pre-source-field bronze table picks up
+    the new ``source`` / ``ecfs_*`` columns transparently. Returns the row-count
+    operation metrics from delta-rs as ``{"inserted": N, "updated": M}``.
     """
     with local_tmp_delta_path(path) as local_path:
         path_str = str(local_path)
@@ -34,6 +37,8 @@ def merge_comments(
             empty = pa.Table.from_pylist([], schema=arrow_table.schema)
             write_deltalake(path_str, empty, mode="overwrite")
             log.info("Initialised Delta table at %s", path_str)
+        else:
+            ensure_schema(path_str, arrow_table.schema, allow_destructive=True)
 
         dt = DeltaTable(path_str)
         metrics = (

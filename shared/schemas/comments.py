@@ -5,11 +5,14 @@ The Pydantic ``RawComment`` is the source of truth. Both the active
 ``raw_comment_struct()`` (kept for parity with the Databricks/Spark write path)
 are derived from the same field-type table below — a single sync test guards
 against drift.
+
+See ADR-0012 for the multi-source unification design (regulations.gov + ECFS).
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 import pyarrow as pa
 from pydantic import BaseModel, ConfigDict
@@ -17,12 +20,20 @@ from pyspark.sql import types as T
 
 
 class RawComment(BaseModel):
-    """One public comment from regulations.gov v4, normalized to bronze."""
+    """One public comment normalized to bronze.
+
+    Source is required at the Pydantic layer so the IngestionAgent cannot insert
+    a row without a source label, but the column is Arrow-nullable so ADR-0004's
+    ``ensure_schema()`` can migrate older on-disk tables that pre-date the
+    field. Same pattern as ``comment_id``, ``docket_id``, ``ingested_at``. See
+    ADR-0012.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     comment_id: str
     docket_id: str
+    source: Literal["regulations_gov", "ecfs"]
     document_type: str | None = None
     title: str | None = None
     posted_date: datetime | None = None
@@ -40,12 +51,16 @@ class RawComment(BaseModel):
     has_attachments: bool = False
     attributes_json: str = "{}"
     ingested_at: datetime
+    ecfs_proceeding_id: str | None = None
+    ecfs_submission_type_id: int | None = None
+    ecfs_express_comment: bool | None = None
 
 
 # (arrow_type, spark_type) per field. Field order here drives both derived schemas.
 _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
     "comment_id": (pa.string(), T.StringType()),
     "docket_id": (pa.string(), T.StringType()),
+    "source": (pa.string(), T.StringType()),
     "document_type": (pa.string(), T.StringType()),
     "title": (pa.string(), T.StringType()),
     "posted_date": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
@@ -63,6 +78,9 @@ _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
     "has_attachments": (pa.bool_(), T.BooleanType()),
     "attributes_json": (pa.string(), T.StringType()),
     "ingested_at": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
+    "ecfs_proceeding_id": (pa.string(), T.StringType()),
+    "ecfs_submission_type_id": (pa.int64(), T.LongType()),
+    "ecfs_express_comment": (pa.bool_(), T.BooleanType()),
 }
 
 

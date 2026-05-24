@@ -308,3 +308,117 @@ def test_vectors_are_normalized_defensively(tmp_path: Path) -> None:
     assert output.metadata["clusters_written"] == 1
     [cluster] = _read(clusters_path)
     assert np.isclose(cluster["max_similarity"], 1.0)
+
+
+def test_vector_search_clustering_path(tmp_path: Path) -> None:
+    embeddings_path = tmp_path / "embeddings"
+    candidates_list = [
+        {
+            "comment_id": "a",
+            "embedding_vector": [1.0, 0.0],
+            "docket_id": "DOCKET-CLUSTER",
+            "embedding_model": "real-model",
+            "embedding_dim": 2,
+            "backend": "local_sentence_transformer",
+            "text_hash": "hash-a",
+            "text_source": "detail_comment_text",
+        },
+        {
+            "comment_id": "b",
+            "embedding_vector": [0.99, 0.01],
+            "docket_id": "DOCKET-CLUSTER",
+            "embedding_model": "real-model",
+            "embedding_dim": 2,
+            "backend": "local_sentence_transformer",
+            "text_hash": "hash-b",
+            "text_source": "detail_comment_text",
+        },
+        {
+            "comment_id": "c",
+            "embedding_vector": [0.0, 1.0],
+            "docket_id": "DOCKET-CLUSTER",
+            "embedding_model": "real-model",
+            "embedding_dim": 2,
+            "backend": "local_sentence_transformer",
+            "text_hash": "hash-c",
+            "text_source": "detail_comment_text",
+        },
+    ]
+    # Seed embeddings table
+    from shared.delta_utils.silver import merge_comment_embeddings
+
+    rows = [
+        _make_embedding(comment_id=c["comment_id"], vector=c["embedding_vector"])
+        for c in candidates_list
+    ]
+    merge_comment_embeddings(embeddings_path, _embeddings_to_arrow(rows))
+
+    # Mock Vector Search Client
+    class MockIndex:
+        def similarity_search(self, query_vector, columns, num_results):
+            import numpy as np
+
+            q = np.array(query_vector, dtype=np.float32)
+            results = []
+            for c in candidates_list:
+                v = np.array(c["embedding_vector"], dtype=np.float32)
+                sim = float(np.dot(q, v) / (np.linalg.norm(q) * np.linalg.norm(v)))
+                results.append((c["comment_id"], sim))
+            results.sort(key=lambda x: -x[1])
+            return {
+                "result": {"data_array": [[r[0], r[1]] for r in results[:num_results]]},
+                "manifest": {"columns": [{"name": "comment_id"}, {"name": "score"}]},
+            }
+
+    class MockVSC:
+        def get_index(self, endpoint_name, index_name):
+            return MockIndex()
+
+    # Run clustering agent in vector search mode
+    clusters_path = tmp_path / "clusters"
+    memberships_path = tmp_path / "memberships"
+    output = ClusteringAgent().run(
+        ClusteringInput(
+            docket_id="DOCKET-CLUSTER",
+            embedding_model="real-model",
+            embeddings_path=str(embeddings_path),
+            clusters_path=str(clusters_path),
+            memberships_path=str(memberships_path),
+            clustering_version="v1_vector_search_cosine",
+            clustering_mode="vector_search",
+            vector_index_name="workspace.silver.test_index",
+            vector_search_client=MockVSC(),
+            similarity_threshold=0.92,
+        )
+    )
+
+    assert output.metadata["mode"] == "vector_search"
+    assert output.metadata["pair_count_evaluated"] == 0
+    assert output.metadata["comments_considered"] == 3
+    assert output.metadata["clusters_found"] == 1
+    assert output.metadata["coverage"] == pytest.approx(2 / 3)
+    assert output.metadata["clusters_written"] == 1
+    assert output.metadata["memberships_written"] == 2
+
+
+def test_vector_search_requires_explicit_mode_and_index(tmp_path: Path) -> None:
+    embeddings_path = tmp_path / "embeddings"
+    _seed_embeddings(
+        embeddings_path,
+        [
+            _make_embedding(comment_id="a", vector=[1.0, 0.0]),
+            _make_embedding(comment_id="b", vector=[0.99, 0.01]),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="vector_index_name is required"):
+        ClusteringAgent().run(
+            ClusteringInput(
+                docket_id="DOCKET-CLUSTER",
+                embedding_model="real-model",
+                embeddings_path=str(embeddings_path),
+                clusters_path=str(tmp_path / "clusters"),
+                memberships_path=str(tmp_path / "memberships"),
+                clustering_mode="vector_search",
+            )
+        )

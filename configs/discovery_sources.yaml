@@ -1,0 +1,26 @@
+# Astroturf Autopilot Discovery Sources
+# Configures the active search criteria and targets for automatic docket discovery.
+
+regulations_gov:
+  keywords:
+    - "methane"
+    - "payday lending"
+    - "digital asset"
+    - "non-compete clause"
+    - "privacy rules"
+    - "robocalls"
+    - "net neutrality"
+  agencies:
+    - "EPA"
+    - "CFPB"
+    - "SEC"
+    - "FTC"
+    - "FDA"
+  limit: 20
+
+ecfs:
+  proceedings:
+    - "17-108"  # Net neutrality repeal
+    - "23-562"  # Algorithmic transparency / AI
+    - "14-28"   # Robocalls & caller ID spoofing
+    - "20-443"  # Broadband deployment and privacy

@@ -1,0 +1,29 @@
+# test fixture, not official full rule text
+# ---------------------------------------------------------------------------
+# This file is a curated EXCERPT used by MigrationAgent's local_text mode for
+# unit tests and demo runs against FCC docket 17-108. It is NOT the official
+# full text of the Restoring Internet Freedom Order. Do not cite this file as
+# authoritative rule text. See ADR-0015 and docs/attribution-and-migration-
+# methodology.html (when available) for the policy.
+# ---------------------------------------------------------------------------
+# Each "## Section" header below acts as a section boundary for the migration
+# matcher. Section names are illustrative, not the agency's actual numbering.
+
+## Section A: Findings on regulatory burden
+The Commission has reviewed the record and finds that the prior framework
+imposed an unprecedented regulatory power on the internet and risked
+smothering innovation across the broadband marketplace. The Commission
+concludes that returning to a light-touch framework better balances investment
+incentives with consumer protection.
+
+## Section B: Economic impact
+Commenters have asserted that the prior approach risked damaging the American
+economy and obstructing job creation. The Commission, after reviewing
+comments and supporting filings, finds that a lighter regulatory regime is
+more likely to encourage capital deployment in broadband infrastructure.
+
+## Section C: Procedural background
+This Order responds to comments filed in the docket between 2017 and 2018,
+including a substantial volume of bulk and template comments. The Commission
+acknowledges the record but bases its decision on the substantive arguments
+presented, not on comment volume.

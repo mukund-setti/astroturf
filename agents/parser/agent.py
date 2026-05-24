@@ -3,6 +3,12 @@
 Deterministic-first parsing stage that fetches individual comment detail JSON,
 extracts and cleans submitted HTML comments using BeautifulSoup, classifies cover
 notes, catalogs attachment files, and logs comprehensive MLflow metrics.
+
+Source-awareness (ADR-0012): for ``source == "ecfs"`` bronze rows, the agent
+skips the detail-API fetch (ECFS ``text_data`` is already plain text in
+bronze) and writes a ``ParsedComment`` with ``text_source = "ecfs_text_data"``.
+ECFS rows do not produce ``comment_details`` or ``comment_attachments`` in
+Phase 1 — that's covered when ECFS attachment handling lands.
 """
 
 from __future__ import annotations
@@ -10,7 +16,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -29,6 +34,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from shared.api_keys import resolve_data_gov_api_key
 from shared.delta_utils.silver import (
     merge_parsed_comments,
     merge_comment_details,
@@ -163,13 +169,12 @@ class ParserAgent:
     ) -> None:
         self.config = config or {}
         if http_client is None:
-            api_key = os.environ.get("REGULATIONS_GOV_API_KEY")
-            # In test environments or when REGULATIONS_GOV_API_KEY is not defined,
-            # allow passing a preconfigured http_client or log a warning.
+            api_key = resolve_data_gov_api_key(required=False)
             if not api_key:
                 log.warning(
-                    "REGULATIONS_GOV_API_KEY is not set. Real API requests will fail. "
-                    "Ignore if mock client is used or this is a test run."
+                    "DATA_GOV_API_KEY is not set. Real regulations.gov detail "
+                    "requests will fail. Ignore if a mock client is used or this "
+                    "is a test run."
                 )
             http_client = httpx.Client(
                 base_url=API_BASE,
@@ -281,6 +286,16 @@ class ParserAgent:
             comment_id = record.get("comment_id")
             if not comment_id:
                 log.warning("Skipping bronze row with missing comment_id: %s", record)
+                continue
+
+            # ECFS rows already carry plain-text bodies in bronze.comment_text; no
+            # detail-API fetch is needed (ADR-0012). Build the ParsedComment in
+            # place and skip the regulations.gov enrichment block below.
+            if record.get("source") == "ecfs":
+                parsed_row = _build_parsed_ecfs(record, inputs.docket_id, now)
+                if parsed_row.text_source == "ecfs_text_data":
+                    comments_enriched_substantive += 1
+                parsed_rows.append(parsed_row)
                 continue
 
             if delay_seconds > 0:
@@ -615,6 +630,56 @@ class ParserAgent:
                 "duration_seconds": duration,
             },
         )
+
+
+def _build_parsed_ecfs(
+    record: dict[str, Any], docket_id: str, now: datetime
+) -> ParsedComment:
+    """Build a ParsedComment from an ECFS bronze row without a detail-API fetch.
+
+    ECFS ``text_data`` is already plain text, so HTML stripping is unnecessary.
+    No comment_details / comment_attachments rows are produced in Phase 1.
+    """
+    raw_text = record.get("comment_text")
+    if raw_text is not None and raw_text.strip() != "":
+        text_source = "ecfs_text_data"
+        parse_status = "parsed"
+        normalized_text = re.sub(r"\s+", " ", raw_text.strip().lower())
+        normalized_text_hash = hashlib.sha256(
+            normalized_text.encode("utf-8")
+        ).hexdigest()
+        char_count = len(raw_text)
+        token_estimate = max(1, char_count // 4)
+    else:
+        raw_text = None
+        text_source = "missing"
+        parse_status = "missing_text"
+        normalized_text = None
+        normalized_text_hash = None
+        char_count = 0
+        token_estimate = 0
+
+    return ParsedComment(
+        comment_id=record["comment_id"],
+        docket_id=docket_id,
+        title=record.get("title"),
+        posted_date=record.get("posted_date"),
+        last_modified_date=record.get("last_modified_date"),
+        received_date=record.get("received_date"),
+        source_system_version="ecfs_public_api",
+        parser_version="v2A",
+        text_source=text_source,
+        raw_text=raw_text,
+        normalized_text=normalized_text,
+        normalized_text_hash=normalized_text_hash,
+        token_estimate=token_estimate,
+        char_count=char_count,
+        has_attachments=bool(record.get("has_attachments") or False),
+        attachment_count=0,
+        parse_status=parse_status,
+        parse_error=None,
+        parsed_at=now,
+    )
 
 
 def _parsed_rows_to_arrow(rows: list[ParsedComment]) -> pa.Table:

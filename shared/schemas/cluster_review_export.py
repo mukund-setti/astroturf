@@ -40,13 +40,17 @@ class ClusterReviewExportRow(BaseModel):
     # UI can group, filter, and label rows without joining back to gold).
     cluster_id: str
     docket_id: str
+    topic_id: str | None = None
+    agency_id: str | None = None
     embedding_model: str
     similarity_threshold: float
     cluster_size: int
     representative_comment_id: str
+    representative_text: str | None = None
 
     # Per-comment fields.
     comment_id: str
+    member_comment_id: str | None = None
     is_representative: bool
     # text_source is propagated from membership/parsed_comments so reviewers
     # can see whether the cluster was driven by detail JSON text, attachment
@@ -56,7 +60,12 @@ class ClusterReviewExportRow(BaseModel):
     # truncated to ~500 chars. Stored on the row so the UI can render preview
     # cards without hitting silver. Full text remains in silver.parsed_comments.
     text_preview: str | None = None
+    member_text: str | None = None
+    similarity: float | None = None
     submitter_name: str | None = None
+    submitter_organization: str | None = None
+    submitter_state: str | None = None
+    submitter_country: str | None = None
     posted_date: datetime | None = None
 
     # ``source`` distinguishes semantic-embedding clusters from the exact-hash
@@ -64,6 +73,23 @@ class ClusterReviewExportRow(BaseModel):
     # "exact_hash". Derived from ``embedding_backend`` in gold.comment_clusters
     # (the ``exact_hash`` baseline writer uses backend = "exact_hash").
     source: str
+    exact_match_ratio: float | None = None
+    near_duplicate_ratio: float | None = None
+    purity_score: float | None = None
+    confidence_score: float | None = None
+
+    # Optional attribution / migration evidence — populated when AttributionAgent
+    # and MigrationAgent have run for this cluster. Absence MUST NOT break
+    # export or UI rendering (see ADR-0015). Values are "candidate" /
+    # "evidence overlap", never causal claims.
+    candidate_entity_name: str | None = None
+    candidate_entity_type: str | None = None
+    attribution_confidence: float | None = None
+    attribution_evidence_url: str | None = None
+    migration_match_type: str | None = None
+    migration_section: str | None = None
+    migration_similarity: float | None = None
+    migration_claim_scope: str | None = None
 
     exported_at: datetime
 
@@ -73,17 +99,38 @@ class ClusterReviewExportRow(BaseModel):
 _FIELD_TYPES: dict[str, tuple[pa.DataType, T.DataType]] = {
     "cluster_id": (pa.string(), T.StringType()),
     "docket_id": (pa.string(), T.StringType()),
+    "topic_id": (pa.string(), T.StringType()),
+    "agency_id": (pa.string(), T.StringType()),
     "embedding_model": (pa.string(), T.StringType()),
     "similarity_threshold": (pa.float64(), T.DoubleType()),
     "cluster_size": (pa.int64(), T.LongType()),
     "representative_comment_id": (pa.string(), T.StringType()),
+    "representative_text": (pa.string(), T.StringType()),
     "comment_id": (pa.string(), T.StringType()),
+    "member_comment_id": (pa.string(), T.StringType()),
     "is_representative": (pa.bool_(), T.BooleanType()),
     "text_source": (pa.string(), T.StringType()),
     "text_preview": (pa.string(), T.StringType()),
+    "member_text": (pa.string(), T.StringType()),
+    "similarity": (pa.float64(), T.DoubleType()),
     "submitter_name": (pa.string(), T.StringType()),
+    "submitter_organization": (pa.string(), T.StringType()),
+    "submitter_state": (pa.string(), T.StringType()),
+    "submitter_country": (pa.string(), T.StringType()),
     "posted_date": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
     "source": (pa.string(), T.StringType()),
+    "exact_match_ratio": (pa.float64(), T.DoubleType()),
+    "near_duplicate_ratio": (pa.float64(), T.DoubleType()),
+    "purity_score": (pa.float64(), T.DoubleType()),
+    "confidence_score": (pa.float64(), T.DoubleType()),
+    "candidate_entity_name": (pa.string(), T.StringType()),
+    "candidate_entity_type": (pa.string(), T.StringType()),
+    "attribution_confidence": (pa.float64(), T.DoubleType()),
+    "attribution_evidence_url": (pa.string(), T.StringType()),
+    "migration_match_type": (pa.string(), T.StringType()),
+    "migration_section": (pa.string(), T.StringType()),
+    "migration_similarity": (pa.float64(), T.DoubleType()),
+    "migration_claim_scope": (pa.string(), T.StringType()),
     "exported_at": (pa.timestamp("us", tz="UTC"), T.TimestampType()),
 }
 

@@ -306,10 +306,38 @@ def add_text_preview(
 
 def run_app():
     st.set_page_config(page_title="Bronze & Silver Delta Lake Debug UI", layout="wide")
-    st.title("AstroTurf medaillon Debug UI")
+    st.title("AstroTurf medallion Debug UI")
     st.caption(
         "Internal developer tool for visually inspecting bronze raw ingestion, details enrichment, and silver attachment cataloging."
     )
+
+    # Showcase & Benchmarks Links Box
+    with st.expander("📚 Phase 3 Quality Reports & Benchmark Indexes", expanded=True):
+        st.markdown(
+            "Quick access to compiled evidentiary packets, 100K benchmarks, and architecture guides:"
+        )
+        c_l, c_r = st.columns(2)
+        with c_l:
+            st.markdown(
+                "- [Reviewer Runbook Guide](file:///c:/Users/mukun/astroturf/docs/reviewer-walkthrough.md)"
+            )
+            st.markdown(
+                "- [Why Databricks Matters Guide](file:///c:/Users/mukun/astroturf/docs/why-databricks-matters.md)"
+            )
+            st.markdown(
+                "- [Repository Polish Quality Audit](file:///c:/Users/mukun/astroturf/docs/repository-polish-audit.md)"
+            )
+        with c_r:
+            st.markdown(
+                "- [100K Scale Benchmark Report](file:///c:/Users/mukun/astroturf/artifacts/benchmark/benchmark_report.md)"
+            )
+            st.markdown(
+                "- [Coordinated Campaign Evidence Receipts](file:///c:/Users/mukun/astroturf/artifacts/demo/example_run/demo_quality_evaluation_17-108.md)"
+            )
+            st.markdown(
+                "- [Exact Duplicate vs. Semantic Lift Report](file:///c:/Users/mukun/astroturf/artifacts/demo/example_run/cluster_evidence_17-108.md)"
+            )
+
     st.info(
         "**Medallion Architecture Check:** Bronze stores raw regulations.gov list-endpoint records. "
         "ParserAgent v2A enriches silver tables by fetching individual comment detail JSON bodies, cataloging attachments, "

@@ -1,4 +1,4 @@
-"""Unit tests for ParserAgent — real delta-rs writes to tmp_path."""
+"""Unit tests for ParserAgent â€” real delta-rs writes to tmp_path."""
 
 from __future__ import annotations
 
@@ -167,6 +167,7 @@ def test_parser_chooses_body_when_present(tmp_path):
     raw_comment = RawComment(
         comment_id="C1",
         docket_id="D1",
+        source="regulations_gov",
         title="My Title",
         comment_text="  This is the actual comment text.  \nWith extra whitespace.  ",
         ingested_at=datetime.now(timezone.utc),
@@ -222,6 +223,7 @@ def test_parser_falls_back_to_title_when_body_missing(tmp_path):
     raw_comment = RawComment(
         comment_id="C2",
         docket_id="D1",
+        source="regulations_gov",
         title="  The Title  ",
         comment_text="",  # empty
         ingested_at=datetime.now(timezone.utc),
@@ -269,6 +271,7 @@ def test_parser_marks_missing_text_when_both_missing(tmp_path):
     raw_comment = RawComment(
         comment_id="C3",
         docket_id="D1",
+        source="regulations_gov",
         title=None,
         comment_text=None,
         ingested_at=datetime.now(timezone.utc),
@@ -318,6 +321,7 @@ def test_normalization_and_hash_are_stable(tmp_path):
     c1 = RawComment(
         comment_id="C1",
         docket_id="D1",
+        source="regulations_gov",
         title=None,
         comment_text="Some   Text   to   Clean",
         ingested_at=datetime.now(timezone.utc),
@@ -325,6 +329,7 @@ def test_normalization_and_hash_are_stable(tmp_path):
     c2 = RawComment(
         comment_id="C2",
         docket_id="D1",
+        source="regulations_gov",
         title=None,
         comment_text="  some text to clean  ",
         ingested_at=datetime.now(timezone.utc),
@@ -380,6 +385,7 @@ def test_silver_merge_is_idempotent(tmp_path):
     c = RawComment(
         comment_id="C_IDEM",
         docket_id="D1",
+        source="regulations_gov",
         title="Hello",
         comment_text="World",
         ingested_at=datetime.now(timezone.utc),
@@ -433,6 +439,7 @@ def test_enrichment_cataloging_and_diagnostics(tmp_path):
     c1 = RawComment(
         comment_id="C_ENRICH_SUB",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title",
         comment_text="List endpoint cover note",
         has_attachments=True,
@@ -441,6 +448,7 @@ def test_enrichment_cataloging_and_diagnostics(tmp_path):
     c2 = RawComment(
         comment_id="C_ENRICH_COVER",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title 2",
         comment_text="List endpoint cover note 2",
         has_attachments=True,
@@ -578,6 +586,7 @@ def test_enrichment_incremental_skipping(tmp_path):
     c1 = RawComment(
         comment_id="C_ALREADY",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title",
         comment_text="List endpoint cover note",
         ingested_at=datetime.now(timezone.utc),
@@ -585,6 +594,7 @@ def test_enrichment_incremental_skipping(tmp_path):
     c2 = RawComment(
         comment_id="C_NEW",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title 2",
         comment_text="List endpoint cover note 2",
         ingested_at=datetime.now(timezone.utc),
@@ -664,6 +674,7 @@ def test_max_detail_fetches_limits(tmp_path):
     c1 = RawComment(
         comment_id="C_LIMIT_1",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title 1",
         comment_text="Cover note 1",
         ingested_at=datetime.now(timezone.utc),
@@ -671,6 +682,7 @@ def test_max_detail_fetches_limits(tmp_path):
     c2 = RawComment(
         comment_id="C_LIMIT_2",
         docket_id="D1",
+        source="regulations_gov",
         title="Docket Title 2",
         comment_text="Cover note 2",
         ingested_at=datetime.now(timezone.utc),

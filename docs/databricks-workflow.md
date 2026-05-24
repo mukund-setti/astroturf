@@ -117,6 +117,8 @@ is **not** triggered here - see [`databricks-vector-search.md`](./databricks-vec
 | `min_cluster_size`        | `2`                                  | Drop singletons.                               |
 | `clustering_max_rows`     | (blank)                              |                                                |
 | `clustering_version`      | `v1_connected_components_cosine`     | Carried into `gold.comment_clusters.clustering_version`. |
+| `clustering_mode`         | `vector_search`                      | Use Vector Search candidate retrieval for Databricks production runs. |
+| `vector_index_name`       | `astroturf.silver.comment_embeddings_bge_large_index` | Required when `clustering_mode=vector_search`. |
 | `allow_mock`              | `false`                              | Must be `false` for the demo run.              |
 
 Reads `astroturf.silver.comment_embeddings`. Writes
@@ -163,11 +165,14 @@ Two MLflow runs land in the workspace experiment per Workflow run (the
   - Params: `docket_id`, `embedding_model`, `clustering_version`,
     `similarity_threshold`, `min_cluster_size`, `allow_mock`, plus
     `embedding_backend = databricks_foundation_model` once candidates load.
+  - Params: include `mode` / `clustering_mode` and, for production runs,
+    `vector_index_name`.
   - Metrics: `candidates_total`, `candidates_after_mock_filter`,
-    `rows_clustered`, `pair_count_evaluated`, `edge_count_above_threshold`,
-    `clusters_written`, `memberships_written`, `deleted_clusters`,
-    `deleted_memberships`, `largest_cluster_size`, `mean_cluster_size`,
-    `duration_seconds`.
+    `rows_clustered`, `comments_considered`, `pair_count_evaluated`,
+    `edge_count_above_threshold`, `clusters_written`, `clusters_found`,
+    `memberships_written`, `deleted_clusters`, `deleted_memberships`,
+    `largest_cluster_size`, `mean_cluster_size`, `coverage`,
+    `duration_seconds`, and `runtime_seconds`.
 
 Both runs share the workspace MLflow experiment associated with the notebook.
 Use the experiment ID in the Workflow definition if you want runs pinned to a

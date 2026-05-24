@@ -231,7 +231,10 @@ def ensure_schema(
                 null_arr = pa.nulls(len(all_records), type=field.type)
                 all_records = all_records.append_column(field, null_arr)
 
-        # Cast to expected schema to ensure correct field ordering and types
+        # Reorder columns to match the expected schema before casting types —
+        # ``Table.cast`` doesn't reorder, so additions in the middle of the
+        # schema would otherwise fail with a field-name mismatch.
+        all_records = all_records.select(expected_arrow_schema.names)
         all_records = all_records.cast(expected_arrow_schema)
 
         # Write back the table
