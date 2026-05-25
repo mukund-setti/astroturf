@@ -217,13 +217,22 @@ To submit runs directly to your cloud compute from the UI, configure these envir
 
 ```bash
 ASTROTURF_EXECUTION_MODE=databricks_job
-DATABRICKS_JOB_ID="<your-databricks-job-id>"
+DATABRICKS_JOB_ID="<web-analysis-job-id>"
 DATABRICKS_HOST="https://<your-databricks-instance>.cloud.databricks.com"
 DATABRICKS_TOKEN="dapi****************"
+DATABRICKS_CATALOG="astroturf"
+DATABRICKS_DATA_ROOT="/Volumes/astroturf/demo/exports/_lakehouse"
+DATABRICKS_REPO_PATH="/Workspace/Repos/<user>/astroturf"
+DATABRICKS_VECTOR_INDEX_NAME="astroturf.silver.comment_embeddings_bge_large_index"
 DATABRICKS_AUTOPILOT_JOB_ID="<optional-autopilot-workflow-job-id>"
 ```
 
-1. **Submit Analysis Request**: Click **Submit Analysis Job** on the `/analyze` page. This creates a durable request in `ui/.data/analysis-requests.json` and issues a `POST` request using bearer authorization to Databricks' `/api/2.1/jobs/run-now` REST API.
+`DATABRICKS_JOB_ID` must point to a Databricks job task running
+`notebooks/databricks/web_analysis_job.py`. Do not point hosted requests at
+`notebooks/databricks/workflow_tasks.py`; that notebook is the sample-loader
+demo workflow and expects pre-uploaded `bronze.raw_imports` Parquet folders.
+
+1. **Submit Analysis Request**: Click **Submit Analysis Job** on the `/analyze` page. This creates a durable request in PostgreSQL in production and issues a `POST` request using bearer authorization to Databricks' `/api/2.1/jobs/run-now` REST API.
 2. **Execution Monitoring**: The app redirects you to `/analysis/[request_id]` displaying details and status. Click **Sync Databricks Run** to query the run status (`GET /api/2.1/jobs/runs/get`) and map it back into local state (`submitted`, `running`, `succeeded`, `failed`).
 3. **Data Sync Guard**: When status updates to `succeeded`, the page links to `/dockets/[docket_id]`. If the final Unity Catalog export table is still replicating, a waiting screen appears. Click **Verify Table Sync** to check Databricks SQL Warehouse tables.
 

@@ -45,6 +45,11 @@ dbutils.widgets.text(
     "/Workspace/Repos/<user>/astroturf",
     "Repo working directory on the cluster",
 )
+dbutils.widgets.text(
+    "request_id",
+    "",
+    "Hosted web request ID. Must be blank for sample-loader workflow.",
+)
 
 import sys
 
@@ -53,6 +58,13 @@ catalog = dbutils.widgets.get("catalog")
 docket_id = dbutils.widgets.get("docket_id")
 data_root = dbutils.widgets.get("data_root").rstrip("/")
 repo_path = dbutils.widgets.get("repo_path").rstrip("/")
+request_id = dbutils.widgets.get("request_id").strip()
+
+if request_id and task in ("all", "load_sample_tables"):
+    raise ValueError(
+        "Hosted analysis job cannot use sample-loader raw_imports path. "
+        "Use web_analysis_job."
+    )
 
 if repo_path and repo_path not in sys.path:
     sys.path.insert(0, repo_path)
@@ -133,6 +145,46 @@ if task in ("all", "load_sample_tables"):
     )
     bronze_volume = dbutils.widgets.get("bronze_volume").rstrip("/")
 
+    import os
+
+    def resolve_parquet_path(volume: str, table_key: str) -> str:
+        candidates = [
+            f"{volume}/{table_key}",
+            f"{volume}/bronze.{table_key}"
+            if "raw" in table_key
+            else f"{volume}/silver.{table_key}",
+            f"{volume}/uc_sample/{table_key}",
+            f"{volume}/uc_sample/bronze.{table_key}"
+            if "raw" in table_key
+            else f"{volume}/uc_sample/silver.{table_key}",
+        ]
+        resolved = None
+        for c in candidates:
+            # 1. Try standard os.path.exists check (reliable for Volume mounts)
+            try:
+                if os.path.exists(c):
+                    resolved = c
+                    print(f"Resolved parquet source path via os.path.exists: {c}")
+                    break
+            except Exception:
+                pass
+
+            # 2. Try spark read check (failsafe validation)
+            try:
+                spark.read.parquet(c).limit(0).count()
+                resolved = c
+                print(f"Resolved parquet source path via spark.read validation: {c}")
+                break
+            except Exception:
+                pass
+
+        if not resolved:
+            resolved = candidates[0]
+            print(
+                f"Warning: Could not confirm existence of candidate paths, defaulting fallback to: {resolved}"
+            )
+        return resolved
+
     spark.sql(f"CREATE CATALOG IF NOT EXISTS {catalog}")
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.bronze")
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalog}.silver")
@@ -155,7 +207,8 @@ if task in ("all", "load_sample_tables"):
         except Exception as e:
             print(f"Path cleaning skipped for {p}: {e}")
 
-    raw_df = spark.read.parquet(f"{bronze_volume}/raw_comments/")
+    resolved_raw_path = resolve_parquet_path(bronze_volume, "raw_comments")
+    raw_df = spark.read.parquet(resolved_raw_path)
     (
         raw_df.write.format("delta")
         .mode("overwrite")
@@ -168,7 +221,8 @@ if task in ("all", "load_sample_tables"):
         f"AS SELECT * FROM delta.`{raw_comments_path}`"
     )
 
-    parsed_df = spark.read.parquet(f"{bronze_volume}/parsed_comments/")
+    resolved_parsed_path = resolve_parquet_path(bronze_volume, "parsed_comments")
+    parsed_df = spark.read.parquet(resolved_parsed_path)
     (
         parsed_df.write.format("delta")
         .mode("overwrite")

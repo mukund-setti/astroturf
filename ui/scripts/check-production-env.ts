@@ -82,7 +82,10 @@ async function runReadinessCheck() {
     const requiredDbVars = [
       "DATABRICKS_HOST",
       "DATABRICKS_TOKEN",
-      "DATABRICKS_JOB_ID"
+      "DATABRICKS_JOB_ID",
+      "DATABRICKS_CATALOG",
+      "DATABRICKS_DATA_ROOT",
+      "DATABRICKS_REPO_PATH"
     ];
 
     for (const v of requiredDbVars) {
@@ -97,6 +100,17 @@ async function runReadinessCheck() {
           : val.trim();
         console.log(`  ✅ ${v} is configured: ${displayVal}`);
       }
+    }
+
+    const dataRoot = process.env.DATABRICKS_DATA_ROOT || "";
+    if (dataRoot.includes("bronze/raw_imports")) {
+      console.error(
+        "ERROR: DATABRICKS_DATA_ROOT points at the sample-loader raw_imports path."
+      );
+      console.error(
+        "Hosted analysis jobs must use web_analysis_job.py with a working lakehouse root such as /Volumes/astroturf/demo/exports/_lakehouse."
+      );
+      hasErrors = true;
     }
   }
 

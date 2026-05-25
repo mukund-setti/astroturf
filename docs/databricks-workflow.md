@@ -1,10 +1,56 @@
-# Databricks Workflow runbook: `astroturf-cfpb-demo`
+# Databricks Workflow runbook
 
-This runbook explains how to wire `notebooks/databricks/workflow_tasks.py` into
-the four-task `astroturf-cfpb-demo` Databricks Workflow described in
+There are two Databricks entrypoints, and they are intentionally separate:
+
+- Hosted web requests use `notebooks/databricks/web_analysis_job.py`.
+- Demo and benchmark sample loads use `notebooks/databricks/workflow_tasks.py`.
+
+`DATABRICKS_JOB_ID` in the hosted Next.js app must point to the
+`web_analysis_job.py` job. The sample-loader workflow reads pre-uploaded
+Parquet under `bronze.raw_imports` and is not a production request target.
+
+## Hosted Web Analysis Job
+
+Create a single Databricks job task that runs
+`notebooks/databricks/web_analysis_job.py`. The notebook reads these job
+parameters from the UI:
+
+| Parameter | Description |
+| --- | --- |
+| `docket_id` | Requested docket ID. |
+| `source` | `regulations_gov` or `ecfs`. |
+| `topic_id` | UI topic identifier for export rows. |
+| `agency_id` | UI agency identifier for export rows. |
+| `start_date` / `end_date` | Optional `YYYY-MM-DD` source API window. |
+| `expected_scale` | Maximum comments to ingest for the request. |
+| `request_id` | Durable web control-plane request ID. |
+| `catalog` | Unity Catalog target, normally `astroturf` or `workspace`. |
+| `data_root` | Delta working root, usually `/Volumes/<catalog>/demo/exports/_lakehouse`. |
+| `repo_path` | Workspace repo path containing `agents/` and `shared/`. |
+
+The web job creates missing `bronze`, `silver`, `gold`, and `demo` schemas,
+creates the backing volume when `data_root` is under `/Volumes/...`, ingests
+from the public source API, parses, embeds with `databricks-bge-large-en`,
+clusters, and exports to `<catalog>.demo.cluster_review_export`.
+
+It must not read `/Volumes/astroturf/bronze/raw_imports/raw_comments` or
+`/Volumes/astroturf/bronze/raw_imports/parsed_comments`. If a hosted web
+request accidentally reaches the sample-loader workflow with `request_id` set,
+that workflow fails immediately with:
+
+```text
+Hosted analysis job cannot use sample-loader raw_imports path. Use web_analysis_job.
+```
+
+## Sample Loader Demo Workflow
+
+The rest of this runbook explains how to wire
+`notebooks/databricks/workflow_tasks.py` into the four-task
+`astroturf-cfpb-demo` Databricks Workflow described in
 [`docs/databricks-integration.md`](./databricks-integration.md) under
 *Minimal Databricks Workflow*. It is the implementation-side companion to that
-plan.
+plan and should be used only for demos, benchmarks, and controlled promotion of
+local Parquet samples.
 
 The notebook is one file with four `# COMMAND ----------` blocks - one per
 Workflow task. Each task in the Workflow points at the same notebook and uses

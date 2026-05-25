@@ -177,10 +177,18 @@ ASTROTURF_EXECUTION_MODE=command
    * Production-safe hosted environment tier. Creates a request record and submits the pipeline run to the **Databricks Jobs API** (`POST /api/2.1/jobs/run-now`) to execute over distributed serverless cloud compute.
    * Configure the following variables in `ui/.env.local`:
      ```bash
-     DATABRICKS_JOB_ID="<your-databricks-job-id>"
+     DATABRICKS_JOB_ID="<web-analysis-job-id>"
      DATABRICKS_HOST="https://<your-databricks-instance>.cloud.databricks.com"
      DATABRICKS_TOKEN="dapi****************"
+     DATABRICKS_CATALOG="astroturf"
+     DATABRICKS_DATA_ROOT="/Volumes/astroturf/demo/exports/_lakehouse"
+     DATABRICKS_REPO_PATH="/Workspace/Repos/<user>/astroturf"
+     DATABRICKS_VECTOR_INDEX_NAME="astroturf.silver.comment_embeddings_bge_large_index"
      ```
+   * `DATABRICKS_JOB_ID` must point to the hosted request job running
+     `notebooks/databricks/web_analysis_job.py`. Do not use the
+     `workflow_tasks.py` sample-loader job for hosted requests; it expects
+     pre-uploaded `bronze.raw_imports` Parquet folders.
    * Syncs and monitors progress using `GET /api/2.1/jobs/runs/get` to map scheduler lifecycle states (`PENDING`, `RUNNING`, `TERMINATED`) to tracking statuses (`submitted`, `running`, `succeeded`, `failed`) under `/analysis/[request_id]`.
 
 ### Backwards Compatibility

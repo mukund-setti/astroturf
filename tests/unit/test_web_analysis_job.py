@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
@@ -94,3 +95,9 @@ def test_smoke_harness_does_not_log_secret(
     assert "super-secret-value" not in captured.out
     assert "super-secret-value" not in captured.err
     assert "web_analysis_job smoke parameters parsed successfully" in captured.out
+
+
+def test_databricks_notebook_is_self_contained() -> None:
+    notebook = Path("notebooks/databricks/web_analysis_job.py").read_text()
+
+    assert "scripts.web_analysis_job_support" not in notebook
