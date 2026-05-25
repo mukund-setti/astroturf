@@ -250,6 +250,69 @@ export async function updateAnalysisRequest(
 }
 
 /**
+ * Return the docket_id of the most-recently-succeeded analysis request,
+ * or null if no such row exists in the control plane.
+ *
+ * Used by the landing-page stats/clusters APIs so the dashboard automatically
+ * shows the docket from the latest finished run instead of a hard-coded demo
+ * docket.
+ */
+export async function getMostRecentSucceededDocketId(): Promise<string | null> {
+  if (useDb) {
+    try {
+      const rows = await pgQuery<{ docket_id: string }>(
+        "SELECT docket_id FROM analysis_requests WHERE status = $1 ORDER BY updated_at DESC LIMIT 1",
+        ["succeeded"]
+      );
+      if (rows.length === 0) return null;
+      const value = (rows[0].docket_id ?? "").toString().trim();
+      return value || null;
+    } catch (err) {
+      console.error(
+        "Failed to query most-recently-succeeded analysis request from PostgreSQL:",
+        err
+      );
+      if (isProduction) throw err;
+    }
+  }
+
+  // Local dev fallback: scan the JSON store. listAnalysisRequests() already
+  // handles file-not-found and malformed-JSON gracefully.
+  const list = await listAnalysisRequests();
+  const succeeded = list.filter((r) => r.status === "succeeded");
+  if (succeeded.length === 0) return null;
+  succeeded.sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+  const value = (succeeded[0].docket_id ?? "").toString().trim();
+  return value || null;
+}
+
+/**
+ * Resolve the docket_id surfaced by the landing-page stats and clusters APIs.
+ *
+ * Precedence, top wins:
+ *   1. The docket_id of the most-recently-succeeded analysis_requests row
+ *      (Supabase in production, local JSON in dev). This is what makes the
+ *      landing page automatically switch to whatever docket finished last.
+ *   2. The DEMO_DOCKET_ID environment variable, for deployments that want a
+ *      pinned demo docket regardless of run history (e.g. a reviewer walkthrough).
+ *   3. The hard-coded string "17-108" (the original ECFS net-neutrality demo),
+ *      so the dashboard never renders an empty/undefined docket.
+ *
+ * This is intentionally separate from databricks.ts::getDocketId(), which is
+ * also consumed by other surfaces (e.g. app/page.tsx) where the older "env or
+ * 17-108" behaviour is still appropriate.
+ */
+export async function resolveLandingDocketId(): Promise<string> {
+  const fromDb = await getMostRecentSucceededDocketId();
+  if (fromDb) return fromDb;
+  const envValue = (process.env.DEMO_DOCKET_ID ?? "").trim();
+  if (envValue) return envValue;
+  return "17-108";
+}
+
+/**
  * Helper to convert PostgreSQL column formats to local TS interfaces
  */
 function mapRowToRequest(row: Record<string, unknown>): AnalysisRequest {

@@ -30,6 +30,11 @@ function getEnvOrThrow(name: string): string {
   return value.trim();
 }
 
+function getEnvOrDefault(name: string, fallback: string): string {
+  const value = process.env[name];
+  return value && value.trim() ? value.trim() : fallback;
+}
+
 /**
  * Submits a Databricks Job run for the given AnalysisRequest
  */
@@ -46,9 +51,14 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
 
   const url = `${host}/api/2.1/jobs/run-now`;
 
+  // The astroturf-analysis-pipeline job is configured with job-level parameters
+  // (the Databricks "Job parameters" feature). The 2.1 API rejects notebook_params
+  // for such jobs with "Cannot use legacy parameters ... because the job has job
+  // parameters configured." So we send job_parameters: a flat string->string map
+  // that the notebook reads via dbutils.widgets.get(...).
   const payload = {
     job_id: parseInt(jobId, 10),
-    notebook_params: {
+    job_parameters: {
       docket_id: request.docket_id,
       source: request.source,
       topic_id: request.topic_id,
@@ -57,6 +67,17 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
       end_date: request.date_end || "null",
       expected_scale: String(request.expected_scale),
       request_id: request.request_id,
+      catalog: getEnvOrDefault("DATABRICKS_CATALOG", "astroturf"),
+      data_root: getEnvOrDefault(
+        "DATABRICKS_DATA_ROOT",
+        "/Volumes/astroturf/demo/exports/_lakehouse"
+      ),
+      repo_path: getEnvOrDefault(
+        "DATABRICKS_REPO_PATH",
+        "/Workspace/Repos/<user>/astroturf"
+      ),
+      vector_index_name: getEnvOrDefault("DATABRICKS_VECTOR_INDEX_NAME", ""),
+      clustering_mode: getEnvOrDefault("ASTROTURF_CLUSTERING_MODE", "vector_search"),
     },
   };
 

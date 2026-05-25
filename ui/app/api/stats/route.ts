@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCatalog, getDocketId, query, toInt } from "@/lib/databricks";
+import { getCatalog, query, toInt } from "@/lib/databricks";
+import { resolveLandingDocketId } from "@/lib/analysis-store";
 import type { StatsPayload } from "@/lib/types";
 
 export const revalidate = 3600;
@@ -14,7 +15,7 @@ interface StatsRow {
 export async function GET() {
   try {
     const catalog = getCatalog();
-    const docketId = getDocketId();
+    const docketId = await resolveLandingDocketId();
 
     const sql = `
       SELECT

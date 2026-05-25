@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCatalog, getDocketId, query, toInt, toIso } from "@/lib/databricks";
+import { getCatalog, query, toInt, toIso } from "@/lib/databricks";
+import { resolveLandingDocketId } from "@/lib/analysis-store";
 import type { ClusterSummary } from "@/lib/types";
 
 export const revalidate = 3600;
@@ -20,7 +21,7 @@ interface ClusterSummaryRow {
 export async function GET() {
   try {
     const catalog = getCatalog();
-    const docketId = getDocketId();
+    const docketId = await resolveLandingDocketId();
 
     const sql = `
       SELECT
