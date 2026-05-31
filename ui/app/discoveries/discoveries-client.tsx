@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -293,23 +294,23 @@ export function DiscoveriesClient({ initialDiscoveries, executionMode = "command
             That&rsquo;s a healthy state for the discovery autopilot — there are no validated
             federal rulemakings on the watchlist waiting for a first run. New candidates show up
             here as the autopilot crawls regulations.gov and FCC ECFS, and as{" "}
-            <a href="/analyze" className="text-brand hover:underline font-medium">/analyze</a>{" "}
+            <Link href="/analyze" className="text-brand hover:underline font-medium">/analyze</Link>{" "}
             registers user-requested dockets.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <a
+            <Link
               href="/analysis"
               className="inline-flex h-10 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground hover:bg-brand/90 transition-colors"
               style={{ boxShadow: "var(--shadow-soft)" }}
             >
               See what we&rsquo;ve analyzed →
-            </a>
-            <a
+            </Link>
+            <Link
               href="/analyze"
               className="inline-flex h-10 items-center justify-center rounded-full border border-brand/40 px-5 text-sm font-semibold text-brand hover:bg-brand/5 transition-colors"
             >
               Request a new docket
-            </a>
+            </Link>
           </div>
           <p className="text-xs text-muted-foreground/60 pt-2">
             Catalog auto-refreshes every {Math.round(DISCOVERIES_POLL_INTERVAL_MS / 1000)}s.
