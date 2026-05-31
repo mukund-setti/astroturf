@@ -5,6 +5,7 @@ const monorepoRoot = path.join(__dirname, "..");
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: monorepoRoot,
+  serverExternalPackages: ["@databricks/sql", "lz4"],
   turbopack: {
     root: monorepoRoot,
   },
