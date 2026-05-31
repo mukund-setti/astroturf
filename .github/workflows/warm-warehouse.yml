@@ -1,0 +1,113 @@
+name: Keep Databricks warehouse warm
+
+# Why this exists:
+#
+# The Astroturf UI queries Delta tables directly through a Databricks SQL
+# warehouse. By default warehouses auto-suspend when idle (usually 10 min)
+# and take 30-60 seconds to spin back up. A reviewer landing on /discoveries
+# or /analysis/<id> during that cold-start window sees a stalled page.
+#
+# This workflow fires a tiny `SELECT 1` against the warehouse every 15
+# minutes so it stays in the RUNNING state. It also (optionally) warms the
+# Vercel Next.js deployment so the first request after a cold redeploy
+# doesn't pay the SSR cold-start either.
+#
+# Turn this off when you no longer need the always-on guarantee:
+#   - Disable the workflow in the GitHub Actions tab, OR
+#   - Comment out the `schedule:` trigger below.
+
+on:
+  schedule:
+    # Every 15 minutes. Note: GitHub may delay scheduled runs by 5-15 min
+    # during peak load, so the effective cadence is closer to 20-25 min.
+    # That's still well inside a typical auto-suspend window.
+    - cron: '*/15 * * * *'
+  # Lets you trigger a warm-up by hand from the Actions tab.
+  workflow_dispatch:
+
+# We never want two warm-ups stacked up if a previous one is still running.
+concurrency:
+  group: warm-warehouse
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    name: Ping warehouse + Vercel
+    runs-on: ubuntu-latest
+    # 2 minutes is plenty — the cold start is the slow case, and we're OK
+    # eating that occasionally. If we routinely hit the timeout, the
+    # warehouse auto-suspend is shorter than our interval and we should
+    # bump cron frequency, not the timeout.
+    timeout-minutes: 2
+    steps:
+      - name: Ping Databricks SQL warehouse
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DATABRICKS_HOST:-}" ] || [ -z "${DATABRICKS_TOKEN:-}" ] || [ -z "${DATABRICKS_HTTP_PATH:-}" ]; then
+            echo "::error::Missing one of DATABRICKS_HOST / DATABRICKS_TOKEN / DATABRICKS_HTTP_PATH. Add them under Repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          # DATABRICKS_HTTP_PATH looks like "/sql/1.0/warehouses/abcd1234..."
+          # — the warehouse_id is the last path segment.
+          warehouse_id="${DATABRICKS_HTTP_PATH##*/}"
+          host="${DATABRICKS_HOST%/}"
+
+          echo "Pinging warehouse_id=$warehouse_id on $host"
+
+          # The SQL Statement Execution API auto-resumes a suspended
+          # warehouse, blocks up to wait_timeout for the result, and bills
+          # for fractions of a DBU regardless of suspend state. We pick
+          # 30s so we get the typical 5-15s warm-up reflected in the
+          # response if the warehouse was cold.
+          http_code=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$host/api/2.0/sql/statements" \
+            -d "{
+              \"warehouse_id\": \"$warehouse_id\",
+              \"statement\": \"SELECT 1 AS warm_ping\",
+              \"wait_timeout\": \"30s\"
+            }")
+
+          echo "Response HTTP $http_code"
+          echo "Body (first 800 chars):"
+          head -c 800 /tmp/resp.json || true
+          echo
+
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Databricks API returned HTTP $http_code. See body above."
+            exit 1
+          fi
+
+      - name: Warm the Vercel deployment (optional)
+        env:
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_URL:-}" ]; then
+            echo "VERCEL_URL secret not set — skipping Next.js warm-up."
+            echo "(Add it as a secret if you want production routes pre-warmed too.)"
+            exit 0
+          fi
+
+          # Strip trailing slash, force https:// if just hostname.
+          url="${VERCEL_URL%/}"
+          case "$url" in
+            http://*|https://*) ;;
+            *) url="https://$url" ;;
+          esac
+
+          # The three routes that hit the SQL warehouse on render. Warming
+          # them now means a real visitor sees ~200ms instead of cold SSR.
+          for path in "/" "/discoveries" "/analysis"; do
+            echo "GET $url$path"
+            curl -fsS -o /dev/null -w "  status=%{http_code}  ttfb=%{time_starttransfer}s  total=%{time_total}s\n" \
+              --max-time 30 "$url$path" || echo "  (warm request failed — continuing)"
+          done
