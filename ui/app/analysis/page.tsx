@@ -18,38 +18,42 @@ export default async function AnalysisQueuePage() {
 
       <main className="flex-1 bg-background text-foreground pb-20">
         <section className="mx-auto max-w-6xl px-6 py-12 md:py-16">
-          <div className="border-b border-rule pb-8 mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="pb-10 mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6 border-b border-rule/60">
             <div>
-              <span className="text-[10px] font-sans uppercase tracking-[0.24em] text-brand bg-brand/10 px-2 py-0.5 rounded-sm font-medium">
-                ORCHESTRATION PIPELINE
-              </span>
-              <h1 className="font-display text-4xl md:text-5xl font-semibold mt-4 mb-4">
-                Analysis Request Queue
+              <p className="text-sm text-brand font-medium mb-3">Orchestration pipeline</p>
+              <h1 className="font-display text-4xl md:text-5xl font-semibold tracking-tight leading-tight mb-4">
+                Analysis request queue
               </h1>
-              <p className="text-sm md:text-base text-muted-foreground max-w-[72ch] leading-relaxed">
-                Track pending and completed federal comment analyses submitted to Databricks
-                compute or configured locally. Click on any request to view details and logs.
+              <p className="text-base text-foreground/70 max-w-[64ch] leading-relaxed">
+                Every federal comment analysis ever submitted — to Databricks compute or to a local
+                pipeline. Click any row for stage-by-stage row counts, the Databricks run page,
+                and exported cluster data.
               </p>
             </div>
             <Link
               href="/analyze"
-              className="inline-flex h-10 shrink-0 items-center justify-center rounded-sm bg-brand px-4 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:bg-brand/90 transition-colors"
+              className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground hover:bg-brand/90 transition-colors"
+              style={{ boxShadow: "var(--shadow-soft)" }}
             >
-              Analyze new docket
+              + Analyze new docket
             </Link>
           </div>
 
           {requests.length === 0 ? (
-            <div className="bg-card border border-rule rounded-sm p-12 text-center">
-              <h3 className="font-display text-xl font-semibold text-muted-foreground mb-2">
-                No analysis requests found
+            <div
+              className="bg-card border border-rule/60 rounded-xl p-12 text-center"
+              style={{ boxShadow: "var(--shadow-soft)" }}
+            >
+              <h3 className="font-display text-xl font-semibold text-foreground mb-2">
+                No analysis requests yet
               </h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-                Go to the Analyze page to register a regulations.gov or FCC ECFS docket and start a new run.
+                Register a regulations.gov or FCC ECFS docket from the Analyze page to start the
+                first pipeline run.
               </p>
               <Link
                 href="/analyze"
-                className="inline-flex h-9 items-center justify-center rounded-sm border border-brand text-brand px-4 text-xs font-semibold uppercase tracking-wider hover:bg-brand/5 transition-colors"
+                className="inline-flex h-10 items-center justify-center rounded-full border border-brand text-brand px-5 text-sm font-semibold hover:bg-brand/5 transition-colors"
               >
                 Analyze a docket
               </Link>
@@ -62,7 +66,10 @@ export default async function AnalysisQueuePage() {
                   href={`/analysis/${req.request_id}`}
                   className="group block focus:outline-none"
                 >
-                  <Card className="bg-card border border-rule rounded-sm shadow-none transition-colors group-hover:border-foreground/30">
+                  <Card
+                    className="bg-card border border-rule/60 rounded-xl shadow-none transition-all duration-200 group-hover:-translate-y-0.5"
+                    style={{ boxShadow: "var(--shadow-soft)" }}
+                  >
                     <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">

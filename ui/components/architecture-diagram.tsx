@@ -184,14 +184,15 @@ export function ArchitectureDiagram() {
             <Tile
               y={y0}
               tier="SOURCE"
-              title="regulations.gov"
-              subtitle="federal e-rulemaking API"
+              title="regulations.gov + FCC ECFS"
+              subtitle="dual federal APIs · shared api.data.gov rate budget"
             />
             <Arrow
               fromY={bot(y0)}
               toY={y1}
               agent="IngestionAgent"
-              dbxFeature="UNITY CATALOG"
+              dbxFeature="UNITY CATALOG + DELTA MERGE"
+              dbxSub="idempotent · MLflow run per ingestion"
             />
 
             <Tile
@@ -204,7 +205,8 @@ export function ArchitectureDiagram() {
               fromY={bot(y1)}
               toY={y2}
               agent="ParserAgent"
-              dbxFeature="WORKFLOWS"
+              dbxFeature="WORKFLOWS · SOURCE-AWARE"
+              dbxSub="ECFS skips detail-fetch; regs.gov enriches"
             />
 
             <Tile
@@ -271,6 +273,27 @@ export function ArchitectureDiagram() {
               accent
             />
           </svg>
+        </div>
+
+        <div className="mt-10 md:mt-12 max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="border border-rule bg-card p-5 rounded-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-brand font-medium mb-2">
+              Side branch · AttributionAgent
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Reads from <code className="font-mono text-foreground">gold.comment_clusters</code> and writes{" "}
+              <code className="font-mono text-foreground">gold.campaign_attributions</code>. Offline-seed mode matches against a curated advocacy registry; tool-using LLM mode (web search + registry) gated behind ADR-0015.
+            </p>
+          </div>
+          <div className="border border-rule bg-card p-5 rounded-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-brand font-medium mb-2">
+              Side branch · MigrationAgent
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Compares cluster template language against final agency rule text and writes{" "}
+              <code className="font-mono text-foreground">gold.rule_migrations</code> with phrase-level similarity, section citations, and mandatory caveat text. Federal Register API mode behind ADR-0015.
+            </p>
+          </div>
         </div>
       </div>
     </section>

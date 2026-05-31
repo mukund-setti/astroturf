@@ -35,6 +35,7 @@ from tenacity import (
 )
 
 from shared.api_keys import resolve_data_gov_api_key
+from shared.delta_utils.backend import should_use_spark
 from shared.delta_utils.silver import (
     merge_parsed_comments,
     merge_comment_details,
@@ -201,25 +202,65 @@ class ParserAgent:
             attachments_path,
         )
 
-        # Ensure bronze Delta table exists
-        if not DeltaTable.is_deltatable(bronze_path):
-            raise FileNotFoundError(
-                f"Bronze Delta table not found at {bronze_path}. Please run ingestion first."
+        # Load raw comments from bronze and filter by docket.
+        #
+        # Backend dispatch (ADR-0017 H1b, 2026-05-30): on Databricks the
+        # delta-rs path through `/Volumes/...` FUSE stalls during the
+        # arrow_table.filter() step on tables of more than a few thousand
+        # rows (observed: full-table read of 36K-row bronze for a 5K-row
+        # docket filter hung 44+ minutes with zero progress). The Spark
+        # branch leverages Delta's filter pushdown so we only collect the
+        # docket's rows back to the driver. Local development still goes
+        # through delta-rs against a real local path.
+        if should_use_spark(bronze_path):
+            from pyspark.sql import SparkSession
+            from pyspark.sql import functions as F
+
+            spark = SparkSession.getActiveSession()
+            if spark is None:
+                raise RuntimeError(
+                    "ASTROTURF_DELTA_BACKEND resolved to 'spark' for "
+                    f"bronze_path={bronze_path} but no active SparkSession "
+                    "was found. ParserAgent cannot dispatch through Spark "
+                    "without a session — either start one or set "
+                    "ASTROTURF_DELTA_BACKEND=delta_rs explicitly."
+                )
+            sdf = (
+                spark.read.format("delta")
+                .load(bronze_path)
+                .filter(F.col("docket_id") == inputs.docket_id)
             )
-
-        # Load raw comments from bronze and filter by docket
-        dt = DeltaTable(bronze_path)
-        arrow_table = dt.to_pyarrow_table()
-
-        if "docket_id" in arrow_table.column_names:
-            import pyarrow.compute as pc
-
-            arrow_table = arrow_table.filter(pc.field("docket_id") == inputs.docket_id)
+            # Convert Spark Rows to plain dicts. The downstream loop
+            # (`record.get("source")`, `_build_parsed_ecfs(record, ...)`,
+            # the regulations.gov enrichment block) expects dict-shaped
+            # records with native Python values, which is exactly what
+            # Row.asDict(recursive=True) produces.
+            records = [row.asDict(recursive=True) for row in sdf.collect()]
         else:
-            log.warning("docket_id column not found in bronze Delta table schema.")
-            arrow_table = arrow_table.slice(0, 0)  # Empty table
+            # Ensure bronze Delta table exists. Only meaningful for the
+            # delta-rs branch — Spark's read raises with a clear error
+            # when the path is missing.
+            if not DeltaTable.is_deltatable(bronze_path):
+                raise FileNotFoundError(
+                    f"Bronze Delta table not found at {bronze_path}. Please run ingestion first."
+                )
 
-        records = arrow_table.to_pylist()
+            dt = DeltaTable(bronze_path)
+            arrow_table = dt.to_pyarrow_table()
+
+            if "docket_id" in arrow_table.column_names:
+                import pyarrow.compute as pc
+
+                arrow_table = arrow_table.filter(
+                    pc.field("docket_id") == inputs.docket_id
+                )
+            else:
+                log.warning(
+                    "docket_id column not found in bronze Delta table schema."
+                )
+                arrow_table = arrow_table.slice(0, 0)  # Empty table
+
+            records = arrow_table.to_pylist()
         rows_read = len(records)
 
         # Safety Limit Cap
@@ -231,20 +272,54 @@ class ParserAgent:
             )
             records = records[: inputs.max_rows]
 
-        # Load already enriched IDs from details table (Checkpoint Pattern)
-        already_enriched_ids = set()
-        if not inputs.force_enrich and DeltaTable.is_deltatable(details_path):
+        # Load already enriched IDs from details table (Checkpoint Pattern).
+        # Same H1b backend dispatch as the bronze read above — on Databricks
+        # the delta-rs FUSE read stalls, so route through Spark when the
+        # backend resolves to it. The local-path delta-rs branch is
+        # unchanged so unit tests (which use temporary local paths) still
+        # exercise the same code.
+        already_enriched_ids: set[str] = set()
+        if not inputs.force_enrich:
             try:
-                dt_details = DeltaTable(details_path)
-                tbl_details = dt_details.to_pyarrow_table()
-                import pyarrow.compute as pc
+                if should_use_spark(details_path):
+                    from pyspark.sql import SparkSession
+                    from pyspark.sql import functions as F
 
-                filtered_tbl = tbl_details.filter(
-                    pc.field("enrichment_status") == "success"
-                )
-                already_enriched_ids = set(
-                    filtered_tbl.column("comment_id").to_pylist()
-                )
+                    spark = SparkSession.getActiveSession()
+                    if spark is not None:
+                        try:
+                            sdf_details = (
+                                spark.read.format("delta")
+                                .load(details_path)
+                                .filter(F.col("enrichment_status") == "success")
+                                .select("comment_id")
+                            )
+                            already_enriched_ids = {
+                                row["comment_id"]
+                                for row in sdf_details.collect()
+                            }
+                        except Exception as spark_exc:
+                            # Path may not exist yet (first-ever run for
+                            # this docket) — fall through to the empty
+                            # set, same as the delta-rs is_deltatable
+                            # check used to do for missing tables.
+                            log.info(
+                                "details path %s not readable via Spark "
+                                "(likely brand-new): %s",
+                                details_path,
+                                spark_exc,
+                            )
+                elif DeltaTable.is_deltatable(details_path):
+                    dt_details = DeltaTable(details_path)
+                    tbl_details = dt_details.to_pyarrow_table()
+                    import pyarrow.compute as pc
+
+                    filtered_tbl = tbl_details.filter(
+                        pc.field("enrichment_status") == "success"
+                    )
+                    already_enriched_ids = set(
+                        filtered_tbl.column("comment_id").to_pylist()
+                    )
             except Exception as e:
                 log.warning(
                     "Could not read existing comment_details for checkpointing: %s", e

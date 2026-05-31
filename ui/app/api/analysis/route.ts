@@ -55,7 +55,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required field: agencyId" }, { status: 400 });
     }
 
-    const scaleNum = expectedScale && !isNaN(Number(expectedScale)) ? Number(expectedScale) : 1000;
+    // Trust the user's requested scale (no hard cap). The /analyze form and
+    // /discoveries one-click confirmation surface an honest ETA up front via
+    // ui/lib/runtime-estimate.ts, so users opt in to long runs eyes-open.
+    // We only enforce that scale is a positive integer.
+    const scaleNum = Math.max(
+      1,
+      Math.floor(
+        expectedScale && !isNaN(Number(expectedScale)) ? Number(expectedScale) : 1000,
+      ),
+    );
+
+    // Annotate the request with the ETA we computed at submission time so the
+    // request detail page can show "you were quoted ~Xh, run has been going Yh"
+    // honestly, without recomputing in case the cost model changes later.
+    const { estimateRuntime, formatRuntime } = await import("@/lib/runtime-estimate");
+    const eta = estimateRuntime(source as "regulations_gov" | "ecfs", scaleNum);
+    const etaNote = ` (estimated runtime at submission: ${formatRuntime(eta.totalMinutes)}; bottleneck: ${eta.bottleneckStage})`;
 
     // Create a base draft request in local/UC store
     const newRequest = await createAnalysisRequest({
@@ -67,7 +83,9 @@ export async function POST(request: Request) {
       date_start: startDate && startDate.trim() ? startDate.trim() : null,
       date_end: endDate && endDate.trim() ? endDate.trim() : null,
       expected_scale: scaleNum,
-      notes: (notes || "Registered from the Astroturf Analyze a docket workflow.").trim(),
+      notes:
+        (notes || "Registered from the Astroturf Analyze a docket workflow.").trim() +
+        etaNote,
     });
 
     // 2. Branch dynamically based on execution mode

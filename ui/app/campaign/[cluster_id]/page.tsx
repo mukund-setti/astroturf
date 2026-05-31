@@ -277,18 +277,18 @@ export default async function ClusterDetailPage({ params }: PageProps) {
                   {/* Clean styled SVG bar chart */}
                   <svg viewBox="0 0 400 120" className="w-full max-w-[320px]">
                     {/* Grid Lines */}
-                    <line x1="10" y1="100" x2="390" y2="100" stroke="#e5dfd4" strokeWidth="1" />
-                    <line x1="10" y1="50" x2="390" y2="50" stroke="#e5dfd4" strokeWidth="0.5" strokeDasharray="2" />
+                    <line x1="10" y1="100" x2="390" y2="100" stroke="#e2e1dc" strokeWidth="1" />
+                    <line x1="10" y1="50" x2="390" y2="50" stroke="#e2e1dc" strokeWidth="0.5" strokeDasharray="2" />
                     
                     {/* Bar 1 (17:00 UTC - 44 comments) */}
-                    <rect x="70" y="90" width="40" height="10" fill="#efeae0" rx="1" />
+                    <rect x="70" y="90" width="40" height="10" fill="#ecebe6" rx="1" />
                     <text x="90" y="112" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#5b544c">17:00 UTC</text>
                     <text x="90" y="85" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#5b544c">44</text>
 
                     {/* Bar 2 (19:00 UTC - 958 comments) */}
-                    <rect x="250" y="10" width="40" height="90" fill="#b23a1c" rx="1" />
-                    <text x="270" y="112" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#b23a1c" fontWeight="bold">19:00 UTC</text>
-                    <text x="270" y="5" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#b23a1c" fontWeight="bold">958 (Peak)</text>
+                    <rect x="250" y="10" width="40" height="90" fill="#4338ca" rx="1" />
+                    <text x="270" y="112" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#4338ca" fontWeight="bold">19:00 UTC</text>
+                    <text x="270" y="5" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#4338ca" fontWeight="bold">958 (Peak)</text>
                   </svg>
                 </div>
 

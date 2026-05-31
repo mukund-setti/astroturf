@@ -3,19 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-interface HydratedWatchItem {
-  watch_id: string;
-  kind: "topic" | "agency" | "docket" | "keyword";
-  value: string;
-  label: string;
-  status: "active" | "inactive";
-  created_at: string;
-  last_checked_at: string;
-  notes: string | null;
-  coverageStatus: "analyzed" | "baseline_only" | "monitoring" | "none";
-  coverageLabel: string;
-}
+import { hydrateWatchItem, type HydratedWatchItem } from "@/lib/watchlist-coverage";
 
 interface WatchlistClientProps {
   initialItems: HydratedWatchItem[];
@@ -53,13 +41,7 @@ export function WatchlistClient({ initialItems }: WatchlistClientProps) {
       }
 
       const newItem = await res.json();
-      
-      // Hydrate newly added item locally
-      const hydratedNewItem: HydratedWatchItem = {
-        ...newItem,
-        coverageStatus: "monitoring",
-        coverageLabel: "Monitoring Active",
-      };
+      const hydratedNewItem = hydrateWatchItem(newItem);
 
       setItems([hydratedNewItem, ...items]);
       setValue("");

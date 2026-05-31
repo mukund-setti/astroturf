@@ -15,7 +15,8 @@ import {
   getClustersSummary,
   getDataDiagnostics,
   getDataSourceLabel,
-  getDocketId,
+  getValidatedDemoClustersSummary,
+  getValidatedDemoStatsPayload,
   getStatsPayload,
   isOfflineMode,
 } from "@/lib/databricks";
@@ -29,14 +30,20 @@ import { daysBetweenInclusive, formatInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 3600;
+const FEATURED_DOCKET_ID = "17-108";
 
 export default async function Home() {
-  const [stats, clusters] = await Promise.all([
-    getStatsPayload(),
-    getClustersSummary(),
+  let [stats, clusters] = await Promise.all([
+    getStatsPayload(FEATURED_DOCKET_ID),
+    getClustersSummary(FEATURED_DOCKET_ID),
   ]);
 
-  const docketId = stats.docket_id || getDocketId();
+  if (stats.cluster_count === 0 && stats.comments_in_clusters === 0 && clusters.length === 0) {
+    stats = getValidatedDemoStatsPayload();
+    clusters = getValidatedDemoClustersSummary();
+  }
+
+  const docketId = stats.docket_id || FEATURED_DOCKET_ID;
   const copy = getDocketCopy(docketId);
   const featured = clusters[0];
   const daySpan = featured

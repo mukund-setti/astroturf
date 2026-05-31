@@ -70,6 +70,13 @@ interface ClusterDetailRow {
   exported_at: unknown;
 }
 
+export interface PipelineOutputCounts {
+  raw_comments: number;
+  parsed_comments: number;
+  export_rows: number;
+  export_clusters: number;
+}
+
 function hasEnv(name: string): boolean {
   const value = process.env[name];
   return !!value && value.trim() !== "";
@@ -135,7 +142,14 @@ export function isOfflineMode(): boolean {
 }
 
 export function getCatalog(): string {
-  const raw = (process.env.DATABRICKS_CATALOG ?? "workspace").trim();
+  // IMPORTANT: this default must match the catalog default used when
+  // submitting Databricks jobs from `submitDocketJob` in
+  // `ui/lib/databricks-jobs.ts`. Historically these two helpers
+  // disagreed ("workspace" here vs. "astroturf" there), so the
+  // Databricks job would write to `astroturf.bronze.raw_comments`
+  // while the UI queried `workspace.bronze.raw_comments`, always
+  // getting zero rows and erroneously marking the run as failed.
+  const raw = (process.env.DATABRICKS_CATALOG ?? "astroturf").trim();
   return raw;
 }
 
@@ -166,6 +180,178 @@ export function toIso(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string") return value;
   return null;
+}
+
+/**
+ * Returns lakehouse row counts for ``docketId`` if and only if we can
+ * actually query the live Databricks SQL warehouse. Returns ``null``
+ * when verification is not possible, i.e. when the UI is in mock mode,
+ * in auto mode without SQL credentials configured, or when the live
+ * query failed and the data layer silently fell back to mock fixtures.
+ *
+ * Callers must treat ``null`` as "unknown, could not verify" rather
+ * than "verified empty". A previous bug here returned ``{0, 0, 0, 0}``
+ * in mock/fallback mode, which caused successful Databricks runs to be
+ * falsely re-marked as failed.
+ */
+export async function getPipelineOutputCounts(
+  docketId: string,
+): Promise<PipelineOutputCounts | null> {
+  if (!canQueryLakehouse()) {
+    return null;
+  }
+
+  const catalog = getCatalog();
+  const sql = `
+    SELECT
+      (SELECT COUNT(*)
+         FROM ${catalog}.bronze.raw_comments
+         WHERE docket_id = :docket_id)
+        AS raw_comments,
+      (SELECT COUNT(*)
+         FROM ${catalog}.silver.parsed_comments
+         WHERE docket_id = :docket_id)
+        AS parsed_comments,
+      (SELECT COUNT(*)
+         FROM ${catalog}.demo.cluster_review_export
+         WHERE docket_id = :docket_id)
+        AS export_rows,
+      (SELECT COUNT(DISTINCT cluster_id)
+         FROM ${catalog}.demo.cluster_review_export
+         WHERE docket_id = :docket_id)
+        AS export_clusters
+  `;
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await query<Record<string, unknown>>(sql, { docket_id: docketId });
+  } catch (err) {
+    console.warn(
+      `getPipelineOutputCounts: live SQL query failed for docket_id=${docketId}; treating counts as unknown.`,
+      err,
+    );
+    return null;
+  }
+
+  if (lastResolvedDataSource !== "live") {
+    return null;
+  }
+
+  const row = rows[0] ?? {};
+  return {
+    raw_comments: toInt(row.raw_comments),
+    parsed_comments: toInt(row.parsed_comments),
+    export_rows: toInt(row.export_rows),
+    export_clusters: toInt(row.export_clusters),
+  };
+}
+
+export interface DetailedStageCounts {
+  raw_comments: number;
+  parsed_comments: number;
+  comment_embeddings: number;
+  clusters: number;
+  cluster_memberships: number;
+  export_rows: number;
+  export_clusters: number;
+}
+
+/**
+ * Live per-stage row counts for a docket, queried directly off the Delta
+ * paths via the SQL warehouse. Used by the auto-polling analysis detail
+ * page to render "Stage 2/5: parsing — 12,431 of 20,697 rows" while a
+ * Databricks notebook is still mid-run.
+ *
+ * Each stage is queried independently and any single failure leaves -1
+ * in that slot instead of throwing. Historically the dropouts came from
+ * the delta-rs FUSE bypass making paths transiently unreadable during
+ * its rmtree→copytree window (see ADR-0017); even after H1 swapped that
+ * for Spark MERGE we keep the -1 sentinel because Spark transactions can
+ * still leave a path briefly inconsistent for a downstream reader.
+ * Callers should render -1 as "syncing…" rather than "zero rows".
+ *
+ * Returns null when live SQL is not available (mock mode, missing
+ * warehouse env vars, etc.), with the same contract as
+ * `getPipelineOutputCounts`.
+ */
+export async function getDetailedStageCounts(
+  docketId: string,
+): Promise<DetailedStageCounts | null> {
+  if (!canQueryLakehouse()) {
+    return null;
+  }
+
+  const dataRoot = (
+    process.env.DATABRICKS_DATA_ROOT ?? "/Volumes/astroturf/demo/exports/_lakehouse"
+  ).replace(/\/+$/, "");
+  const catalog = getCatalog();
+
+  const counts: DetailedStageCounts = {
+    raw_comments: -1,
+    parsed_comments: -1,
+    comment_embeddings: -1,
+    clusters: -1,
+    cluster_memberships: -1,
+    export_rows: -1,
+    export_clusters: -1,
+  };
+
+  const queries: Array<[keyof DetailedStageCounts, string]> = [
+    [
+      "raw_comments",
+      `SELECT COUNT(*) AS n FROM delta.\`${dataRoot}/bronze/raw_comments\` WHERE docket_id = :docket_id`,
+    ],
+    [
+      "parsed_comments",
+      `SELECT COUNT(*) AS n FROM delta.\`${dataRoot}/silver/parsed_comments\` WHERE docket_id = :docket_id`,
+    ],
+    [
+      "comment_embeddings",
+      `SELECT COUNT(*) AS n FROM delta.\`${dataRoot}/silver/comment_embeddings\` WHERE docket_id = :docket_id`,
+    ],
+    [
+      "clusters",
+      `SELECT COUNT(*) AS n FROM delta.\`${dataRoot}/gold/comment_clusters\` WHERE docket_id = :docket_id`,
+    ],
+    [
+      "cluster_memberships",
+      `SELECT COUNT(*) AS n FROM delta.\`${dataRoot}/gold/comment_cluster_memberships\` WHERE docket_id = :docket_id`,
+    ],
+    [
+      "export_rows",
+      `SELECT COUNT(*) AS n FROM ${catalog}.demo.cluster_review_export WHERE docket_id = :docket_id`,
+    ],
+    [
+      "export_clusters",
+      `SELECT COUNT(DISTINCT cluster_id) AS n FROM ${catalog}.demo.cluster_review_export WHERE docket_id = :docket_id`,
+    ],
+  ];
+
+  await Promise.all(
+    queries.map(async ([key, sql]) => {
+      try {
+        const rows = await query<{ n: unknown }>(sql, { docket_id: docketId });
+        if (lastResolvedDataSource === "live") {
+          counts[key] = toInt(rows[0]?.n);
+        }
+      } catch (err) {
+        console.warn(`getDetailedStageCounts: ${key} read failed (likely mid-FUSE-sync):`, err);
+      }
+    }),
+  );
+
+  return counts;
+}
+
+/**
+ * Reports whether the UI process can actually execute live SQL against
+ * the Databricks lakehouse. False when running in offline/mock mode or
+ * when auto mode cannot find the required SQL warehouse env vars.
+ */
+function canQueryLakehouse(): boolean {
+  const mode = getDataMode();
+  if (mode === "mock") return false;
+  if (!hasDatabricksSqlEnv()) return false;
+  return true;
 }
 
 export async function query<T = Record<string, unknown>>(
@@ -618,22 +804,58 @@ export async function getStatsPayload(docketIdParam?: string): Promise<StatsPayl
 
   const sql = `
     SELECT
-      (SELECT COUNT(*)
-         FROM ${catalog}.silver.parsed_comments
-         WHERE docket_id = :docket_id)
-        AS total_comments,
-      (SELECT COUNT(DISTINCT cluster_id)
-         FROM ${catalog}.demo.cluster_review_export
-         WHERE docket_id = :docket_id AND source = 'semantic')
-        AS cluster_count,
-      (SELECT COUNT(DISTINCT comment_id)
-         FROM ${catalog}.demo.cluster_review_export
-         WHERE docket_id = :docket_id AND source = 'semantic')
-        AS comments_in_clusters,
-      (SELECT MAX(cluster_size)
-         FROM ${catalog}.demo.cluster_review_export
-         WHERE docket_id = :docket_id AND source = 'semantic')
-        AS largest_cluster_size
+      COALESCE(
+        NULLIF((
+          SELECT COUNT(*)
+          FROM ${catalog}.silver.parsed_comments
+          WHERE docket_id = :docket_id
+        ), 0),
+        (
+          SELECT COUNT(DISTINCT comment_id)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id
+        ),
+        0
+      ) AS total_comments,
+      COALESCE(
+        NULLIF((
+          SELECT COUNT(DISTINCT cluster_id)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id AND source = 'semantic'
+        ), 0),
+        (
+          SELECT COUNT(DISTINCT cluster_id)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id
+        ),
+        0
+      ) AS cluster_count,
+      COALESCE(
+        NULLIF((
+          SELECT COUNT(DISTINCT comment_id)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id AND source = 'semantic'
+        ), 0),
+        (
+          SELECT COUNT(DISTINCT comment_id)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id
+        ),
+        0
+      ) AS comments_in_clusters,
+      COALESCE(
+        NULLIF((
+          SELECT MAX(cluster_size)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id AND source = 'semantic'
+        ), 0),
+        (
+          SELECT MAX(cluster_size)
+          FROM ${catalog}.demo.cluster_review_export
+          WHERE docket_id = :docket_id
+        ),
+        0
+      ) AS largest_cluster_size
   `;
 
   const rows = await query<StatsRow>(sql, { docket_id: docketId });
@@ -648,11 +870,39 @@ export async function getStatsPayload(docketIdParam?: string): Promise<StatsPayl
   };
 }
 
+export function getValidatedDemoStatsPayload(): StatsPayload {
+  const rows = executeMockQuery<StatsRow>(
+    "SELECT total_comments, cluster_count, comments_in_clusters, largest_cluster_size",
+    {},
+  );
+  const row = rows[0] ?? {};
+  return {
+    total_comments: toInt(row.total_comments),
+    cluster_count: toInt(row.cluster_count),
+    comments_in_clusters: toInt(row.comments_in_clusters),
+    largest_cluster_size: toInt(row.largest_cluster_size),
+    docket_id: "17-108",
+  };
+}
+
 export async function getClustersSummary(docketIdParam?: string): Promise<ClusterSummary[]> {
   const catalog = getCatalog();
   const docketId = docketIdParam || getDocketId();
 
   const sql = `
+    WITH scoped_export AS (
+      SELECT *
+      FROM ${catalog}.demo.cluster_review_export
+      WHERE docket_id = :docket_id
+        AND (
+          source = 'semantic'
+          OR NOT EXISTS (
+            SELECT 1
+            FROM ${catalog}.demo.cluster_review_export
+            WHERE docket_id = :docket_id AND source = 'semantic'
+          )
+        )
+    )
     SELECT
       cluster_id,
       cluster_size,
@@ -667,8 +917,7 @@ export async function getClustersSummary(docketIdParam?: string): Promise<Cluste
         AS rep_posted_date,
       MIN(posted_date) AS earliest_posted_date,
       MAX(posted_date) AS latest_posted_date
-    FROM ${catalog}.demo.cluster_review_export
-    WHERE docket_id = :docket_id AND source = 'semantic'
+    FROM scoped_export
     GROUP BY
       cluster_id,
       cluster_size,
@@ -681,6 +930,24 @@ export async function getClustersSummary(docketIdParam?: string): Promise<Cluste
   const rows = await query<ClusterSummaryRow>(sql, { docket_id: docketId });
 
   return rows.map((r) => ({
+    cluster_id: r.cluster_id,
+    cluster_size: toInt(r.cluster_size),
+    similarity_threshold: Number(r.similarity_threshold ?? 0),
+    embedding_model: r.embedding_model,
+    representative_comment_id: r.representative_comment_id,
+    rep_text_preview: r.rep_text_preview,
+    rep_submitter_name: r.rep_submitter_name,
+    rep_posted_date: toIso(r.rep_posted_date),
+    earliest_posted_date: toIso(r.earliest_posted_date),
+    latest_posted_date: toIso(r.latest_posted_date),
+  }));
+}
+
+export function getValidatedDemoClustersSummary(): ClusterSummary[] {
+  return executeMockQuery<ClusterSummaryRow>(
+    "SELECT cluster_id FROM demo.cluster_review_export GROUP BY cluster_id",
+    {},
+  ).map((r) => ({
     cluster_id: r.cluster_id,
     cluster_size: toInt(r.cluster_size),
     similarity_threshold: Number(r.similarity_threshold ?? 0),

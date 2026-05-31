@@ -458,10 +458,52 @@ def _create_uc_objects() -> None:
     os.makedirs(data_root, exist_ok=True)
 
 
-def _register_delta_view(full_name: str, path: str) -> None:
+def _register_delta_view(full_name: str, path: str) -> int:
     spark.sql(f"CREATE OR REPLACE VIEW {full_name} AS SELECT * FROM delta.`{path}`")
     row_count = spark.table(full_name).count()
     print(f"{full_name} rows: {row_count}")
+    return int(row_count)
+
+
+def _register_delta_view_if_exists(full_name: str, path: str) -> int | None:
+    """Same as ``_register_delta_view`` but silently skips if the Delta path
+    has not been written yet.
+
+    Used for tables the parser only populates conditionally (for example
+    ``silver.comment_details`` and ``silver.comment_attachments``, which
+    ParserAgent skips for ECFS rows entirely). Registering the view in
+    advance — when the path exists — means downstream consumers can rely
+    on the view name being present without the notebook having to know
+    every agent's write pattern.
+    """
+    try:
+        spark.read.format("delta").load(path).limit(0).collect()
+    except Exception as exc:
+        print(
+            f"Skipping view registration for {full_name}; Delta path not yet "
+            f"materialised at {path}: {exc.__class__.__name__}"
+        )
+        return None
+    return _register_delta_view(full_name, path)
+
+
+def _count_docket_rows(full_name: str, docket_value: str) -> int:
+    """Count rows in a registered Delta view that belong to a specific docket.
+
+    The bronze and silver tables accumulate across dockets, so the
+    total row count of the underlying Delta path is not a safe signal
+    that *this* docket produced reviewable rows. We always filter by
+    ``docket_id`` so a zero-row analysis is detected even when other
+    dockets have populated the same lakehouse path.
+    """
+
+    safe_docket = _sql_string(docket_value)
+    row = spark.sql(
+        f"SELECT COUNT(*) AS n FROM {full_name} WHERE docket_id = '{safe_docket}'"
+    ).first()
+    row_count = int(row["n"]) if row is not None else 0
+    print(f"{full_name} rows for docket_id={docket_value!r}: {row_count}")
+    return row_count
 
 
 _create_uc_objects()
@@ -489,6 +531,17 @@ ingestion_output = IngestionAgent(config={"bronze_path": raw_comments_path}).run
 print(f"ingestion rows_written={ingestion_output.rows_written}")
 print(f"ingestion metadata={ingestion_output.metadata}")
 _register_delta_view(f"{catalog}.bronze.raw_comments", raw_comments_path)
+raw_comment_count = _count_docket_rows(f"{catalog}.bronze.raw_comments", docket_id)
+if raw_comment_count == 0:
+    raise RuntimeError(
+        "No raw comments were ingested for "
+        f"docket_id={docket_id!r}, source={source!r}. "
+        "The bronze.raw_comments table has zero rows for this docket. "
+        "Refusing to mark this hosted analysis as successful: this is "
+        "a no-data run, not a campaign dashboard. Common causes: an "
+        "unsupported docket/source pair, an upstream API outage, or "
+        "no public comments yet posted for the docket."
+    )
 
 # COMMAND ----------
 print("Stage 2/5: parsing")
@@ -505,6 +558,27 @@ parser_output = ParserAgent(
 print(f"parser rows_written={parser_output.rows_written}")
 print(f"parser metadata={parser_output.metadata}")
 _register_delta_view(f"{catalog}.silver.parsed_comments", parsed_path)
+# silver.comment_details and silver.comment_attachments are only populated
+# by ParserAgent v2A for regulations.gov rows (ECFS path skips the detail
+# fetch entirely; see ADR-0012). Register the views conditionally so the
+# names exist as soon as the underlying paths do, without failing the run
+# on docket types that don't materialise them.
+_register_delta_view_if_exists(f"{catalog}.silver.comment_details", details_path)
+_register_delta_view_if_exists(
+    f"{catalog}.silver.comment_attachments", attachments_path
+)
+parsed_comment_count = _count_docket_rows(
+    f"{catalog}.silver.parsed_comments", docket_id
+)
+if parsed_comment_count == 0:
+    raise RuntimeError(
+        "No parsed comments were produced for "
+        f"docket_id={docket_id!r}, source={source!r}. "
+        f"Bronze had {raw_comment_count} raw rows but silver.parsed_comments "
+        "has zero rows for this docket. Refusing to mark this hosted "
+        "analysis as successful: parsing eliminated every row, so there is "
+        "nothing to embed, cluster, or review."
+    )
 
 # COMMAND ----------
 print("Stage 3/5: Databricks Foundation Model embedding")

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listWatchItems, addWatchItem, removeWatchItem } from "@/lib/watchlist-store";
+import { listWatchItems, addWatchItem } from "@/lib/watchlist-store";
 
 export async function GET() {
   try {

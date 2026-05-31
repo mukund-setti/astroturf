@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAnalysisRequest, updateAnalysisRequest } from "@/lib/analysis-store";
-import { getRunStatus } from "@/lib/databricks-jobs";
+import { getPipelineOutputCounts } from "@/lib/databricks";
+import { getNotebookExitMessage, getRunStatus } from "@/lib/databricks-jobs";
 
 interface Context {
   params: Promise<{
@@ -38,8 +39,48 @@ export async function POST(request: Request, { params }: Context) {
         newStatus = "running";
       } else if (lifeCycle === "TERMINATED") {
         if (result === "SUCCESS") {
-          newStatus = "succeeded";
-          error_message = null;
+          // Only downgrade a SUCCESS run to failed when we can actually
+          // confirm the lakehouse has zero rows for this docket. When
+          // `getPipelineOutputCounts` returns null we could not verify
+          // (mock mode, missing SQL warehouse env, or live query
+          // failure); trust the Databricks SUCCESS in that case rather
+          // than fabricating a zero-count failure.
+          let counts: Awaited<ReturnType<typeof getPipelineOutputCounts>>;
+          try {
+            counts = await getPipelineOutputCounts(req.docket_id);
+          } catch (countErr) {
+            console.warn(
+              `Failed to verify lakehouse counts for ${req.docket_id}; trusting Databricks SUCCESS.`,
+              countErr,
+            );
+            counts = null;
+          }
+          if (counts === null) {
+            newStatus = "succeeded";
+            error_message = null;
+          } else if (counts.raw_comments === 0 || counts.parsed_comments === 0) {
+            newStatus = "failed";
+            const exitMessage = await getNotebookExitMessage(databricks_run_id);
+            const parts = [
+              "Databricks run completed, but no reviewable comments were loaded for this docket.",
+              `Raw rows: ${counts.raw_comments}; parsed rows: ${counts.parsed_comments}; export rows: ${counts.export_rows}; clusters: ${counts.export_clusters}.`,
+            ];
+            if (exitMessage && /dry[\s_-]?run/i.test(exitMessage)) {
+              parts.push(
+                `Notebook exited early with: "${exitMessage}". The workspace job is pinned to dry-run mode. Clear the 'dry_run=true' notebook task base_parameter in the Databricks job UI (or re-run; the UI now hard-pins dry_run=false in job_parameters).`,
+              );
+            } else if (exitMessage) {
+              parts.push(`Notebook exit message: "${exitMessage}".`);
+            } else {
+              parts.push(
+                "This usually means the docket ID/source pair did not resolve to public comments, the source API returned no usable records, the deployed notebook exited before ingestion (e.g. dry-run), or the UI catalog/data root does not match the catalog/data root the Databricks job actually wrote to (check DATABRICKS_CATALOG and DATABRICKS_DATA_ROOT).",
+              );
+            }
+            error_message = parts.join(" ");
+          } else {
+            newStatus = "succeeded";
+            error_message = null;
+          }
         } else if (result === "FAILED" || result === "TIMEDOUT") {
           newStatus = "failed";
           error_message = message || `Databricks Run terminated with status: ${result}`;

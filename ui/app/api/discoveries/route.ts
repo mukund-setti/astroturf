@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { listDiscoveredDockets, registerDiscoveredDocket, incrementUserRequestCount } from "@/lib/docket-catalog";
+import { listDiscoveredDockets, incrementUserRequestCount } from "@/lib/docket-catalog";
 import { spawn } from "child_process";
-import fs from "fs";
 import path from "path";
 
 export async function GET() {

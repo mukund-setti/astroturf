@@ -1,6 +1,4 @@
-import fs from "fs";
-import path from "path";
-import { query as pgQuery } from "./db";
+import { query as pgQuery, isConnectionError } from "./db";
 
 export interface AnalysisRequest {
   request_id: string;
@@ -21,98 +19,53 @@ export interface AnalysisRequest {
   result_url: string | null;
 }
 
-const isProduction = process.env.ASTROTURF_DEPLOYMENT_MODE === "production";
-const hasDatabaseUrl = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
-
-// Fail loudly in production if DATABASE_URL is missing
-if (isProduction && !hasDatabaseUrl) {
-  throw new Error("CRITICAL CONFIGURATION ERROR: Missing required environment variable 'DATABASE_URL' in production deployment mode. Production requires PostgreSQL state storage.");
-}
-
-const useDb = isProduction || hasDatabaseUrl;
-
-const DATA_DIR = path.resolve(process.cwd(), ".data");
-const STORE_PATH = path.join(DATA_DIR, "analysis-requests.json");
-
-function ensureStoreExists(): void {
-  // Never write local files in production
-  if (isProduction) return;
-
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (!fs.existsSync(STORE_PATH)) {
-      fs.writeFileSync(STORE_PATH, JSON.stringify([]), "utf8");
-    }
-  } catch (err) {
-    console.error("Failed to initialize local analysis store directory or file:", err);
-  }
+// Supabase Postgres is the only store. No more local JSON fallback — every
+// store call goes through pgQuery. Connection-level failures (DB unreachable)
+// degrade gracefully on reads via isConnectionError(); query-level failures
+// (bad SQL, schema mismatch) and all writes throw.
+const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
+if (!databaseUrl) {
+  throw new Error(
+    "CRITICAL CONFIGURATION ERROR: DATABASE_URL is required. The UI control plane talks to Supabase Postgres exclusively; there is no local JSON fallback."
+  );
 }
 
 /**
- * List all analysis requests (newest first)
+ * List all analysis requests (newest first).
  */
 export async function listAnalysisRequests(): Promise<AnalysisRequest[]> {
-  if (useDb) {
-    try {
-      const rows = await pgQuery<Record<string, unknown>>(
-        "SELECT * FROM analysis_requests ORDER BY created_at DESC"
-      );
-      return rows.map(mapRowToRequest);
-    } catch (err) {
-      console.error("Failed to list analysis requests from PostgreSQL:", err);
-      // In production we refuse fallback
-      if (isProduction) throw err;
-    }
-  }
-
-  // Local fallback for dev mode
-  ensureStoreExists();
   try {
-    if (!fs.existsSync(STORE_PATH)) {
-      return [];
-    }
-    const raw = fs.readFileSync(STORE_PATH, "utf8");
-    if (!raw.trim()) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      console.warn("Analysis request store is not an array, resetting to empty.");
-      return [];
-    }
-    return parsed;
+    const rows = await pgQuery<Record<string, unknown>>(
+      "SELECT * FROM analysis_requests ORDER BY created_at DESC"
+    );
+    return rows.map(mapRowToRequest);
   } catch (err) {
-    console.error("Failed to read analysis requests JSON store. Returning empty list.", err);
-    return [];
+    console.error("Failed to list analysis requests from PostgreSQL:", err);
+    if (isConnectionError(err)) return [];
+    throw err;
   }
 }
 
 /**
- * Retrieve a specific analysis request by ID
+ * Retrieve a specific analysis request by ID.
  */
 export async function getAnalysisRequest(id: string): Promise<AnalysisRequest | null> {
-  if (useDb) {
-    try {
-      const rows = await pgQuery<Record<string, unknown>>(
-        "SELECT * FROM analysis_requests WHERE request_id = $1",
-        [id]
-      );
-      if (rows.length === 0) return null;
-      return mapRowToRequest(rows[0]);
-    } catch (err) {
-      console.error(`Failed to fetch analysis request ${id} from PostgreSQL:`, err);
-      if (isProduction) throw err;
-    }
+  try {
+    const rows = await pgQuery<Record<string, unknown>>(
+      "SELECT * FROM analysis_requests WHERE request_id = $1",
+      [id]
+    );
+    if (rows.length === 0) return null;
+    return mapRowToRequest(rows[0]);
+  } catch (err) {
+    console.error(`Failed to fetch analysis request ${id} from PostgreSQL:`, err);
+    if (isConnectionError(err)) return null;
+    throw err;
   }
-
-  const list = await listAnalysisRequests();
-  return list.find((req) => req.request_id === id) || null;
 }
 
 /**
- * Create a new analysis request
+ * Create a new analysis request.
  */
 export async function createAnalysisRequest(
   input: Omit<
@@ -123,54 +76,33 @@ export async function createAnalysisRequest(
   const id = `req_${Math.random().toString(36).substring(2, 11)}`;
   const now = new Date().toISOString();
 
-  if (useDb) {
-    try {
-      await pgQuery(
-        `INSERT INTO analysis_requests (
-          request_id, docket_id, source, topic_id, agency_id, title,
-          date_start, date_end, expected_scale, notes, status,
-          databricks_run_id, error_message, result_url, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-        [
-          id,
-          input.docket_id,
-          input.source,
-          input.topic_id,
-          input.agency_id,
-          input.title,
-          input.date_start,
-          input.date_end,
-          input.expected_scale,
-          input.notes,
-          "draft",
-          null,
-          null,
-          null,
-          now,
-          now,
-        ]
-      );
+  await pgQuery(
+    `INSERT INTO analysis_requests (
+      request_id, docket_id, source, topic_id, agency_id, title,
+      date_start, date_end, expected_scale, notes, status,
+      databricks_run_id, error_message, result_url, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+    [
+      id,
+      input.docket_id,
+      input.source,
+      input.topic_id,
+      input.agency_id,
+      input.title,
+      input.date_start,
+      input.date_end,
+      input.expected_scale,
+      input.notes,
+      "draft",
+      null,
+      null,
+      null,
+      now,
+      now,
+    ]
+  );
 
-      return {
-        ...input,
-        request_id: id,
-        status: "draft",
-        databricks_run_id: null,
-        created_at: now,
-        updated_at: now,
-        error_message: null,
-        result_url: null,
-      };
-    } catch (err) {
-      console.error("Failed to insert analysis request into PostgreSQL:", err);
-      throw err;
-    }
-  }
-
-  // Local fallback for dev mode
-  ensureStoreExists();
-  const list = await listAnalysisRequests();
-  const newRequest: AnalysisRequest = {
+  return {
     ...input,
     request_id: id,
     status: "draft",
@@ -180,73 +112,43 @@ export async function createAnalysisRequest(
     error_message: null,
     result_url: null,
   };
-
-  list.push(newRequest);
-  fs.writeFileSync(STORE_PATH, JSON.stringify(list, null, 2), "utf8");
-  return newRequest;
 }
 
 /**
- * Update an existing analysis request (supports partial PATCH)
+ * Update an existing analysis request (partial PATCH).
  */
 export async function updateAnalysisRequest(
   id: string,
   patch: Partial<AnalysisRequest>
 ): Promise<AnalysisRequest | null> {
-  if (useDb) {
-    try {
-      // Dynamic UPDATE query builder for strict columns matching
-      const allowedKeys = [
-        "docket_id", "source", "topic_id", "agency_id", "title",
-        "date_start", "date_end", "expected_scale", "notes", "status",
-        "databricks_run_id", "error_message", "result_url"
-      ];
-      
-      const fields = Object.keys(patch).filter((k) => allowedKeys.includes(k));
-      if (fields.length === 0) {
-        return getAnalysisRequest(id);
-      }
+  const allowedKeys = [
+    "docket_id", "source", "topic_id", "agency_id", "title",
+    "date_start", "date_end", "expected_scale", "notes", "status",
+    "databricks_run_id", "error_message", "result_url",
+  ];
 
-      const now = new Date().toISOString();
-      const sets = fields.map((f, i) => `${f} = $${i + 2}`);
-      sets.push(`updated_at = $${fields.length + 2}`);
-
-      const params = fields.map((f) => (patch as Record<string, unknown>)[f]);
-      params.push(now);
-
-      const queryText = `
-        UPDATE analysis_requests 
-        SET ${sets.join(", ")} 
-        WHERE request_id = $1 
-        RETURNING *
-      `;
-
-      const rows = await pgQuery<Record<string, unknown>>(queryText, [id, ...params]);
-      if (rows.length === 0) return null;
-      return mapRowToRequest(rows[0]);
-    } catch (err) {
-      console.error(`Failed to update analysis request ${id} in PostgreSQL:`, err);
-      throw err;
-    }
+  const fields = Object.keys(patch).filter((k) => allowedKeys.includes(k));
+  if (fields.length === 0) {
+    return getAnalysisRequest(id);
   }
 
-  // Local fallback for dev mode
-  ensureStoreExists();
-  const list = await listAnalysisRequests();
-  const index = list.findIndex((req) => req.request_id === id);
-  if (index === -1) {
-    return null;
-  }
+  const now = new Date().toISOString();
+  const sets = fields.map((f, i) => `${f} = $${i + 2}`);
+  sets.push(`updated_at = $${fields.length + 2}`);
 
-  const updated = {
-    ...list[index],
-    ...patch,
-    updated_at: new Date().toISOString(),
-  };
+  const params = fields.map((f) => (patch as Record<string, unknown>)[f]);
+  params.push(now);
 
-  list[index] = updated;
-  fs.writeFileSync(STORE_PATH, JSON.stringify(list, null, 2), "utf8");
-  return updated;
+  const queryText = `
+    UPDATE analysis_requests
+    SET ${sets.join(", ")}
+    WHERE request_id = $1
+    RETURNING *
+  `;
+
+  const rows = await pgQuery<Record<string, unknown>>(queryText, [id, ...params]);
+  if (rows.length === 0) return null;
+  return mapRowToRequest(rows[0]);
 }
 
 /**
@@ -258,51 +160,37 @@ export async function updateAnalysisRequest(
  * docket.
  */
 export async function getMostRecentSucceededDocketId(): Promise<string | null> {
-  if (useDb) {
-    try {
-      const rows = await pgQuery<{ docket_id: string }>(
-        "SELECT docket_id FROM analysis_requests WHERE status = $1 ORDER BY updated_at DESC LIMIT 1",
-        ["succeeded"]
-      );
-      if (rows.length === 0) return null;
-      const value = (rows[0].docket_id ?? "").toString().trim();
-      return value || null;
-    } catch (err) {
-      console.error(
-        "Failed to query most-recently-succeeded analysis request from PostgreSQL:",
-        err
-      );
-      if (isProduction) throw err;
-    }
+  try {
+    const rows = await pgQuery<{ docket_id: string }>(
+      "SELECT docket_id FROM analysis_requests WHERE status = $1 ORDER BY updated_at DESC LIMIT 1",
+      ["succeeded"]
+    );
+    if (rows.length === 0) return null;
+    const value = (rows[0].docket_id ?? "").toString().trim();
+    return value || null;
+  } catch (err) {
+    console.error(
+      "Failed to query most-recently-succeeded analysis request from PostgreSQL:",
+      err
+    );
+    if (isConnectionError(err)) return null;
+    throw err;
   }
-
-  // Local dev fallback: scan the JSON store. listAnalysisRequests() already
-  // handles file-not-found and malformed-JSON gracefully.
-  const list = await listAnalysisRequests();
-  const succeeded = list.filter((r) => r.status === "succeeded");
-  if (succeeded.length === 0) return null;
-  succeeded.sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
-  const value = (succeeded[0].docket_id ?? "").toString().trim();
-  return value || null;
 }
 
 /**
  * Resolve the docket_id surfaced by the landing-page stats and clusters APIs.
  *
  * Precedence, top wins:
- *   1. The docket_id of the most-recently-succeeded analysis_requests row
- *      (Supabase in production, local JSON in dev). This is what makes the
- *      landing page automatically switch to whatever docket finished last.
+ *   1. The docket_id of the most-recently-succeeded analysis_requests row.
  *   2. The DEMO_DOCKET_ID environment variable, for deployments that want a
- *      pinned demo docket regardless of run history (e.g. a reviewer walkthrough).
+ *      pinned demo docket regardless of run history.
  *   3. The hard-coded string "17-108" (the original ECFS net-neutrality demo),
  *      so the dashboard never renders an empty/undefined docket.
  *
- * This is intentionally separate from databricks.ts::getDocketId(), which is
- * also consumed by other surfaces (e.g. app/page.tsx) where the older "env or
- * 17-108" behaviour is still appropriate.
+ * Intentionally separate from databricks.ts::getDocketId(), which is consumed
+ * by other surfaces (e.g. app/page.tsx) where the older "env or 17-108"
+ * behaviour is still appropriate.
  */
 export async function resolveLandingDocketId(): Promise<string> {
   const fromDb = await getMostRecentSucceededDocketId();
@@ -312,9 +200,6 @@ export async function resolveLandingDocketId(): Promise<string> {
   return "17-108";
 }
 
-/**
- * Helper to convert PostgreSQL column formats to local TS interfaces
- */
 function mapRowToRequest(row: Record<string, unknown>): AnalysisRequest {
   return {
     request_id: row.request_id as string,

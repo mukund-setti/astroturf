@@ -1,9 +1,8 @@
 import { SiteHeader } from "@/components/site-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { listDiscoveredDockets } from "@/lib/docket-catalog";
 import { listAnalysisRequests } from "@/lib/analysis-store";
 import { cn } from "@/lib/utils";
-import { formatInt } from "@/lib/format";
 import { MonitorClient } from "./monitor-client";
 
 export const revalidate = 0; // Dynamic route

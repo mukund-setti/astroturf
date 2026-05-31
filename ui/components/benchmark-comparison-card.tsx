@@ -2,20 +2,16 @@ interface BenchmarkProps {
   exactCovered: number;
   exactUncovered: number;
   semanticCovered: number;
-  semanticUncovered: number;
   exactClusters: number;
   semanticClusters: number;
-  liftRatio: number;
 }
 
 export function BenchmarkComparisonCard({
   exactCovered = 318,
   exactUncovered = 4675,
   semanticCovered = 1017, // Scaled for the dynamic lift presentation
-  semanticUncovered = 3976,
   exactClusters = 16,
   semanticClusters = 3,
-  liftRatio = 62.6,
 }: Partial<BenchmarkProps>) {
   // Percent calculations
   const total = exactCovered + exactUncovered;

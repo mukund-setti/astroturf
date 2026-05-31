@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { getAnalysisRequest } from "@/lib/analysis-store";
 import { RefreshButton } from "@/components/refresh-button";
-import { Card, CardContent } from "@/components/ui/card";
+import { AnalysisProgress } from "@/components/analysis-progress";
+import { getPipelineOutputCounts, type PipelineOutputCounts } from "@/lib/databricks";
 import { getExecutionMode, getExecutionModeLabel } from "@/lib/execution-mode";
 
 interface PageProps {
@@ -25,6 +26,34 @@ export default async function RequestDetailPage({ params }: PageProps) {
   // Resolve the active execution mode and label
   const mode = getExecutionMode();
   const modeLabel = getExecutionModeLabel(mode);
+  // outputCounts can be:
+  //   - PipelineOutputCounts: live lakehouse counts queried successfully
+  //   - null: counts could not be verified (mock mode, no SQL warehouse
+  //     env, or live query failure). Treat as "unknown", NOT as zero.
+  //   - undefined (initial value): we did not attempt verification
+  //     because the request is not in a succeeded state.
+  let outputCounts: PipelineOutputCounts | null | undefined;
+  if (req.status === "succeeded") {
+    try {
+      outputCounts = await getPipelineOutputCounts(req.docket_id);
+    } catch (err) {
+      console.warn(`Failed to inspect pipeline output counts for ${req.docket_id}`, err);
+      outputCounts = null;
+    }
+  }
+  const succeededWithData = Boolean(
+    req.status === "succeeded" &&
+      outputCounts &&
+      outputCounts.raw_comments > 0 &&
+      outputCounts.parsed_comments > 0
+  );
+  const succeededWithoutVerification =
+    req.status === "succeeded" && outputCounts === null;
+  const succeededWithEmptyLakehouse = Boolean(
+    req.status === "succeeded" &&
+      outputCounts &&
+      (outputCounts.raw_comments === 0 || outputCounts.parsed_comments === 0)
+  );
 
   // Pre-generate the fallback local execution command snippet for dev/reviewers
   const commandSnippet = [
@@ -40,32 +69,40 @@ export default async function RequestDetailPage({ params }: PageProps) {
       <main className="flex-1 bg-background text-foreground pb-20">
         <section className="mx-auto max-w-4xl px-6 py-12 md:py-16">
           {/* Header section with title and status */}
-          <div className="border-b border-rule pb-6 mb-8 flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="pb-8 mb-10 flex flex-col md:flex-row md:items-start justify-between gap-6 border-b border-rule/60">
             <div>
-              <span className="text-[10px] font-sans uppercase tracking-[0.24em] text-brand bg-brand/10 px-2 py-0.5 rounded-sm font-medium">
-                REQUEST DETAILS
-              </span>
-              <h1 className="font-display text-3xl font-semibold mt-4 mb-2">
+              <p className="text-sm text-brand font-medium mb-3">Analysis request</p>
+              <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight leading-tight mb-3">
                 {req.title}
               </h1>
               <p className="text-xs text-muted-foreground font-mono">
-                ID: {req.request_id} • Created {new Date(req.created_at).toLocaleString()}
+                {req.request_id} · created {new Date(req.created_at).toLocaleString()}
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <span
-                className={`text-[10px] uppercase font-sans tracking-wider px-2 py-0.5 rounded-sm font-bold border ${
+                className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 border ${
                   mode === "databricks_job"
-                    ? "bg-green-500/10 border-green-500/20 text-green-500"
+                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-700"
                     : mode === "local_process"
-                    ? "bg-blue-500/10 border-blue-500/20 text-blue-500"
-                    : "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                    ? "bg-blue-500/10 border-blue-500/25 text-blue-700"
+                    : "bg-amber-500/10 border-amber-500/25 text-amber-700"
                 }`}
               >
+                <span
+                  aria-hidden="true"
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${
+                    mode === "databricks_job"
+                      ? "bg-emerald-500"
+                      : mode === "local_process"
+                      ? "bg-blue-500"
+                      : "bg-amber-500"
+                  }`}
+                />
                 {modeLabel}
               </span>
-              <span className={`text-xs uppercase tracking-wider px-3 py-1 rounded-sm font-sans font-semibold border ${getStatusClass(req.status)}`}>
+              <span className={`text-xs font-semibold rounded-full px-3 py-1 border ${getStatusClass(req.status)}`}>
                 {req.status}
               </span>
             </div>
@@ -74,7 +111,7 @@ export default async function RequestDetailPage({ params }: PageProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Metadata Card */}
             <div className="md:col-span-2 space-y-6">
-              <section className="bg-card border border-rule rounded-sm p-6 space-y-4">
+              <section className="bg-card border border-rule/60 rounded-xl p-6 md:p-7 space-y-4" style={{ boxShadow: "var(--shadow-soft)" }}>
                 <h2 className="font-display text-lg font-semibold border-b border-rule pb-2">
                   Rulemaking Metadata
                 </h2>
@@ -133,7 +170,7 @@ export default async function RequestDetailPage({ params }: PageProps) {
               </section>
 
               {/* Status details & actions */}
-              <section className="bg-card border border-rule rounded-sm p-6 space-y-4">
+              <section className="bg-card border border-rule/60 rounded-xl p-6 md:p-7 space-y-4" style={{ boxShadow: "var(--shadow-soft)" }}>
                 <h2 className="font-display text-lg font-semibold border-b border-rule pb-2">
                   Status & Control Plane
                 </h2>
@@ -156,18 +193,6 @@ export default async function RequestDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {req.status === "submitted" && (
-                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-500 text-xs rounded-sm space-y-2">
-                    <span className="font-semibold block text-[11px] uppercase tracking-wider">Job Submitted</span>
-                    <p className="text-foreground/80 leading-relaxed">
-                      The docket analysis job has been sent to Databricks and is currently pending in the workspace scheduler queue.
-                    </p>
-                    <div className="pt-1">
-                      <RefreshButton requestId={req.request_id} />
-                    </div>
-                  </div>
-                )}
-
                 {req.status === "canceled" && (
                   <div className="p-3 bg-muted border border-rule text-muted-foreground text-xs rounded-sm">
                     <span className="font-semibold block mb-1 text-foreground/90 text-[11px] uppercase tracking-wider">Run Canceled</span>
@@ -175,28 +200,45 @@ export default async function RequestDetailPage({ params }: PageProps) {
                   </div>
                 )}
 
-                {req.status === "running" && (
+                {(req.status === "submitted" || req.status === "running") && (
+                  <AnalysisProgress
+                    requestId={req.request_id}
+                    initialStatus={req.status}
+                    source={req.source}
+                    expectedScale={req.expected_scale}
+                    createdAt={req.created_at}
+                  />
+                )}
+
+                {succeededWithEmptyLakehouse && (
                   <div className="space-y-4">
-                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-500 text-xs rounded-sm animate-pulse">
-                      Databricks serverless compute is currently executing the ingestion pipeline.
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-sm">
+                      Databricks reported success, but no reviewable comments were loaded for this docket.
                     </div>
-                    {/* Medallion Pipeline Progress representation */}
-                    <div className="border border-rule rounded-sm p-4 bg-secondary/20 space-y-3">
-                      <span className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                        Medallion Pipeline Stages
-                      </span>
-                      <div className="flex flex-col gap-2 text-xs">
-                        <StageItem label="1. Ingest" desc="Fetch comments from API to raw bronze Delta table" active />
-                        <StageItem label="2. Parse" desc="LLM attachment title/body extraction into silver tables" active />
-                        <StageItem label="3. Embed" desc="Generate BGE embeddings via Foundation Model endpoints" active />
-                        <StageItem label="4. Cluster" desc="Calculate pairwise cosine / connected components in Gold" active />
-                        <StageItem label="5. Export" desc="Generate denormalized UI review exports in UC catalog" active />
-                      </div>
-                    </div>
+                    {outputCounts && (
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Raw rows: <strong>{outputCounts.raw_comments}</strong>; parsed rows: <strong>{outputCounts.parsed_comments}</strong>; exported rows: <strong>{outputCounts.export_rows}</strong>; clusters: <strong>{outputCounts.export_clusters}</strong>.
+                      </p>
+                    )}
+                    <RefreshButton requestId={req.request_id} />
                   </div>
                 )}
 
-                {req.status === "succeeded" && (
+                {succeededWithoutVerification && (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-700 text-xs rounded-sm">
+                      Pipeline run succeeded on Databricks. The UI could not verify lakehouse row counts from this environment (no live Databricks SQL warehouse configured), so reviewer counts are not cross-checked here.
+                    </div>
+                    <Link
+                      href={`/dockets/${req.docket_id}`}
+                      className="inline-flex h-10 w-full items-center justify-center rounded-sm bg-brand text-white text-xs font-semibold uppercase tracking-wider hover:bg-brand/90 transition-colors"
+                    >
+                      View Docket Analysis
+                    </Link>
+                  </div>
+                )}
+
+                {succeededWithData && (
                   <div className="space-y-4">
                     <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs rounded-sm">
                       Pipeline run successfully completed! Campaign data is fully exported.
@@ -230,7 +272,14 @@ export default async function RequestDetailPage({ params }: PageProps) {
                             Open Run in Databricks Workspace ↗
                           </a>
                         )}
-                        <RefreshButton requestId={req.request_id} />
+                        {/* Manual sync kept as a fallback only. The
+                            AnalysisProgress component above auto-polls the
+                            progress endpoint every 10s while the run is in
+                            flight, so this button should almost never need
+                            to be used. */}
+                        {(req.status === "succeeded" || req.status === "failed" || req.status === "canceled") && (
+                          <RefreshButton requestId={req.request_id} />
+                        )}
                       </div>
                     ) : (
                       <span className="text-muted-foreground block text-[11px] leading-relaxed">
@@ -244,7 +293,7 @@ export default async function RequestDetailPage({ params }: PageProps) {
 
             {/* Fallback CLI execution card */}
             <div className="space-y-6">
-              <section className="bg-card border border-rule rounded-sm p-6 space-y-4">
+              <section className="bg-card border border-rule/60 rounded-xl p-6 md:p-7 space-y-4" style={{ boxShadow: "var(--shadow-soft)" }}>
                 <h2 className="font-display text-lg font-semibold border-b border-rule pb-2">
                   Command-Generation Mode
                 </h2>
@@ -263,17 +312,6 @@ export default async function RequestDetailPage({ params }: PageProps) {
         </section>
       </main>
     </>
-  );
-}
-
-function StageItem({ label, desc, active }: { label: string; desc: string; active?: boolean }) {
-  return (
-    <div className="flex items-start gap-2 border-l-2 border-brand/40 pl-3 py-1">
-      <div className="space-y-0.5">
-        <span className={`block font-semibold ${active ? "text-brand" : "text-muted-foreground"}`}>{label}</span>
-        <span className="block text-[10px] text-muted-foreground leading-tight">{desc}</span>
-      </div>
-    </div>
   );
 }
 

@@ -1,38 +1,73 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
-import { getDocketById, getAgencyById, getTopicById } from "@/lib/fallback-data";
-import { getStatsPayload, getClustersSummary } from "@/lib/databricks";
+import { getDocketById, getAgencyById, getTopicById, type Docket } from "@/lib/fallback-data";
+import {
+  getStatsPayload,
+  getClustersSummary,
+  getPipelineOutputCounts,
+} from "@/lib/databricks";
 import { CampaignCard } from "@/components/campaign-card";
 import { formatInt } from "@/lib/format";
 import type { ClusterSummary } from "@/lib/types";
-import { listAnalysisRequests } from "@/lib/analysis-store";
+import { listAnalysisRequests, type AnalysisRequest } from "@/lib/analysis-store";
+import { getDiscoveredDocket, type DiscoveredDocket } from "@/lib/docket-catalog";
+import { getDocketCopy } from "@/lib/docket-copy";
 import { DocketRefreshButton } from "@/components/docket-refresh-button";
 
 interface PageProps {
   params: Promise<{ docket_id: string }>;
 }
 
-export const revalidate = 3600;
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
 export default async function DocketDetailPage({ params }: PageProps) {
   const { docket_id } = await params;
   
   // Clean up URL-encoded parameters if any
   const cleanDocketId = decodeURIComponent(docket_id);
-  const docket = getDocketById(cleanDocketId);
 
-  if (!docket) {
-    notFound();
-  }
+  const [requests, discoveredDocket] = await Promise.all([
+    listAnalysisRequests(),
+    getDiscoveredDocket(cleanDocketId),
+  ]);
+  const matchedReq = requests.find(
+    (r) => r.docket_id.toLowerCase() === cleanDocketId.toLowerCase() && r.status === "succeeded"
+  );
+  const latestReq = requests.find(
+    (r) => r.docket_id.toLowerCase() === cleanDocketId.toLowerCase()
+  );
+  const docket: Docket =
+    getDocketById(cleanDocketId) ??
+    docketFromAnalysisRequest(matchedReq ?? latestReq) ??
+    docketFromDiscoveredDocket(discoveredDocket) ??
+    // Fallback: construct a minimal shell so that "View Docket Analysis"
+    // links from /analysis/[request_id] always resolve instead of 404.
+    // This path is hit when the docket is not hardcoded, Postgres is
+    // unreachable, or the docket was submitted via CLI.
+    (() => {
+      const copy = getDocketCopy(cleanDocketId);
+      return {
+        id: cleanDocketId,
+        title: copy.rule_title || cleanDocketId,
+        agencyId: copy.agency_short || cleanDocketId.split("-")[0] || "unknown",
+        topicId: "analyze",
+        totalComments: 0,
+        commentsInClusters: 0,
+        clusterCount: 0,
+        largestClusterSize: 0,
+        status: "ingestion_ready" as const,
+        statusLabel: "Awaiting data",
+        validationSummary:
+          "This docket does not have locally cached metadata. If a Databricks run completed, click Refresh to re-query live lakehouse row counts.",
+        ruleShortName: copy.rule_short_name || cleanDocketId,
+        ruleTitle: copy.rule_title || cleanDocketId,
+        description: copy.context_sentence || "Analysis details for this docket.",
+      };
+    })();
 
   const agency = getAgencyById(docket.agencyId);
   const topic = getTopicById(docket.topicId);
-
-  const requests = await listAnalysisRequests();
-  const matchedReq = requests.find(
-    (r) => r.docket_id === docket.id && r.status === "succeeded"
-  );
 
   // Try loading real database results for ANY docket if not in strict mock/offline mode
   let isFromDatabase = false;
@@ -61,28 +96,53 @@ export default async function DocketDetailPage({ params }: PageProps) {
     console.warn(`Database query failed or is unpopulated for docket ${docket.id}`, err);
   }
 
-  if (docket.status === "ingestion_ready" && !isFromDatabase) {
-    if (matchedReq) {
+  // Only render the terminal "NO DATA LOADED" state when we can
+  // actually confirm via the live Databricks SQL warehouse that this
+  // docket has zero rows. If the count query is unavailable (mock mode,
+  // no SQL env, or live failure) `getPipelineOutputCounts` returns null
+  // and we must NOT fabricate a no-data dashboard, because Databricks
+  // already reported the run as SUCCESS.
+  if (matchedReq && !isFromDatabase) {
+    let counts: Awaited<ReturnType<typeof getPipelineOutputCounts>> = null;
+    try {
+      counts = await getPipelineOutputCounts(docket.id);
+    } catch (err) {
+      console.warn(`Lakehouse verification query failed for ${docket.id}`, err);
+      counts = null;
+    }
+    const verifiedEmpty =
+      counts !== null &&
+      counts.raw_comments === 0 &&
+      counts.parsed_comments === 0 &&
+      counts.export_rows === 0;
+
+    if (verifiedEmpty) {
       return (
         <>
           <SiteHeader backHref="/analysis" backLabel="Request Queue" />
           <main className="flex-1 bg-background text-foreground pb-20">
             <section className="mx-auto max-w-4xl px-6 py-12 md:py-16 text-center space-y-6">
-              <span className="text-[10px] font-sans uppercase tracking-[0.24em] text-brand bg-brand/10 px-2 py-0.5 rounded-sm font-medium">
-                PIPELINE RUN COMPLETED
+              <span className="text-[10px] font-sans uppercase tracking-[0.24em] text-destructive bg-destructive/10 px-2 py-0.5 rounded-sm font-medium">
+                NO DATA LOADED
               </span>
               <h1 className="font-display text-4xl md:text-5xl font-semibold mt-4 mb-4">
                 {docket.ruleTitle}
               </h1>
               <div className="max-w-xl mx-auto p-6 border border-rule bg-card rounded-sm space-y-4">
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Your analysis run for docket <strong className="font-mono">{docket.id}</strong> succeeded on Databricks!
+                  The Databricks run for docket <strong className="font-mono">{docket.id}</strong> completed, but the lakehouse has no raw, parsed, or exported review rows for this docket.
                 </p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  The data has been processed, but the final Unity Catalog export tables are still replicating or the cache is syncing. This usually takes 1-2 minutes.
+                  This is not a valid analysis dashboard. The request should be treated as a no-data run, usually caused by an unsupported docket/source pair, a source API response with no usable public comments, or a UI/Databricks catalog mismatch (verify DATABRICKS_CATALOG and DATABRICKS_DATA_ROOT match the job&apos;s catalog/data root).
                 </p>
-                <div className="pt-2">
+                <div className="pt-2 flex flex-wrap justify-center gap-3">
                   <DocketRefreshButton />
+                  <Link
+                    href={`/analysis/${matchedReq.request_id}`}
+                    className="inline-flex h-9 items-center justify-center rounded-sm border border-rule px-4 text-xs font-semibold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
+                  >
+                    View request details
+                  </Link>
                 </div>
               </div>
             </section>
@@ -90,7 +150,12 @@ export default async function DocketDetailPage({ params }: PageProps) {
         </>
       );
     }
+    // counts === null: cannot verify; fall through to normal render
+    // so reviewers still see whatever fallback / docket copy the page
+    // would otherwise produce (rather than a misleading no-data panel).
+  }
 
+  if (docket.status === "ingestion_ready" && !isFromDatabase && !matchedReq) {
     return (
       <>
         <SiteHeader backHref="/topics" backLabel="Analyzed coverage" />
@@ -175,6 +240,7 @@ export default async function DocketDetailPage({ params }: PageProps) {
   const percentCoordinated = stats.total_comments > 0 
     ? Math.round((stats.comments_in_clusters / stats.total_comments) * 100)
     : 0;
+  const completedWithoutExportedClusters = Boolean(matchedReq && !isFromDatabase);
 
   const isNetNeutrality = docket.id === "17-108";
   const isEPAMethane = docket.id === "EPA-HQ-OAR-2021-0317";
@@ -343,18 +409,18 @@ export default async function DocketDetailPage({ params }: PageProps) {
               <div className="bg-card border border-rule p-8 rounded-sm">
                 <div className="flex flex-col items-center justify-center py-6">
                   <svg viewBox="0 0 500 150" className="w-full max-w-[400px]">
-                    <line x1="10" y1="120" x2="490" y2="120" stroke="#e5dfd4" strokeWidth="1" />
-                    <line x1="10" y1="60" x2="490" y2="60" stroke="#e5dfd4" strokeWidth="0.5" strokeDasharray="2" />
+                    <line x1="10" y1="120" x2="490" y2="120" stroke="#e2e1dc" strokeWidth="1" />
+                    <line x1="10" y1="60" x2="490" y2="60" stroke="#e2e1dc" strokeWidth="0.5" strokeDasharray="2" />
                     
                     {/* Bar 1 */}
-                    <rect x="120" y="100" width="60" height="20" fill="#efeae0" rx="1" />
+                    <rect x="120" y="100" width="60" height="20" fill="#ecebe6" rx="1" />
                     <text x="150" y="132" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#5b544c">17:00 UTC</text>
                     <text x="150" y="95" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#5b544c">44 comments</text>
 
                     {/* Bar 2 */}
-                    <rect x="300" y="10" width="60" height="110" fill="#b23a1c" rx="1" />
-                    <text x="330" y="132" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#b23a1c" fontWeight="bold">19:00 UTC</text>
-                    <text x="330" y="5" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#b23a1c" fontWeight="bold">958 comments (Peak)</text>
+                    <rect x="300" y="10" width="60" height="110" fill="#4338ca" rx="1" />
+                    <text x="330" y="132" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#4338ca" fontWeight="bold">19:00 UTC</text>
+                    <text x="330" y="5" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#4338ca" fontWeight="bold">958 comments (Peak)</text>
                   </svg>
                   <p className="text-xs text-muted-foreground text-center mt-6 max-w-[60ch] leading-relaxed">
                     Hourly analysis reveals that <strong>94.2%</strong> of the campaign comments on August 28, 2017, were filed in a single 
@@ -377,15 +443,39 @@ export default async function DocketDetailPage({ params }: PageProps) {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {campaigns.map((c) => (
-              <CampaignCard
-                key={c.cluster_id}
-                cluster={c}
-                variant="default"
-              />
-            ))}
-          </div>
+          {campaigns.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {campaigns.map((c) => (
+                <CampaignCard
+                  key={c.cluster_id}
+                  cluster={c}
+                  variant="default"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="border border-rule bg-card rounded-sm p-6 max-w-3xl">
+              <h3 className="font-display text-xl font-semibold mb-2">
+                No reviewable campaign clusters exported
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {completedWithoutExportedClusters
+                  ? "The Databricks job completed, but the UI export table does not contain cluster rows for this docket. That can mean the run found no clusters above threshold, ingested no reviewable comments, or exported rows under a different run scope."
+                  : "No campaign clusters are available for this docket yet."}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <DocketRefreshButton />
+                {matchedReq && (
+                  <Link
+                    href={`/analysis/${matchedReq.request_id}`}
+                    className="inline-flex h-9 items-center justify-center rounded-sm border border-rule px-4 text-xs font-semibold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
+                  >
+                    View request details
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Methodology Notes */}
@@ -420,4 +510,49 @@ export default async function DocketDetailPage({ params }: PageProps) {
       </main>
     </>
   );
+}
+
+function docketFromAnalysisRequest(request: AnalysisRequest | undefined): Docket | null {
+  if (!request) return null;
+  const copy = getDocketCopy(request.docket_id);
+  return {
+    id: request.docket_id,
+    title: request.title || copy.rule_title,
+    agencyId: request.agency_id || copy.agency_short,
+    topicId: request.topic_id || "analyze",
+    totalComments: request.expected_scale,
+    commentsInClusters: 0,
+    clusterCount: 0,
+    largestClusterSize: 0,
+    status: request.status === "succeeded" ? "analyzed" : "ingestion_ready",
+    statusLabel: request.status === "succeeded" ? "Analysis complete" : "Configured, awaiting run",
+    validationSummary:
+      request.status === "succeeded"
+        ? "Databricks analysis completed for this requested docket."
+        : "This docket was registered from the analysis request queue.",
+    ruleShortName: copy.rule_short_name,
+    ruleTitle: request.title || copy.rule_title,
+    description: request.notes || copy.context_sentence,
+  };
+}
+
+function docketFromDiscoveredDocket(discovered: DiscoveredDocket | null): Docket | null {
+  if (!discovered) return null;
+  const copy = getDocketCopy(discovered.docket_id);
+  return {
+    id: discovered.docket_id,
+    title: discovered.title || copy.rule_title,
+    agencyId: discovered.agency_id || copy.agency_short,
+    topicId: discovered.topic_id || "analyze",
+    totalComments: discovered.comment_count_estimate,
+    commentsInClusters: 0,
+    clusterCount: 0,
+    largestClusterSize: 0,
+    status: discovered.status === "analyzed" ? "analyzed" : "ingestion_ready",
+    statusLabel: discovered.status === "analyzed" ? "Analysis complete" : "Discovered",
+    validationSummary: discovered.summary || "This docket was discovered by the control-plane catalog.",
+    ruleShortName: copy.rule_short_name,
+    ruleTitle: discovered.title || copy.rule_title,
+    description: discovered.summary || copy.context_sentence,
+  };
 }

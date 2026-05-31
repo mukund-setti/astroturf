@@ -78,20 +78,44 @@ def fetch_regulations_gov_dockets(
 
 
 def generate_fallback_dockets() -> list[dict[str, Any]]:
-    """Generate deterministic fallback seed dockets for robust demo execution."""
-    log.info("Generating deterministic fallback seed dockets for discovery...")
+    """Generate deterministic fallback seed dockets for robust demo execution.
+
+    IMPORTANT: only include dockets whose existence on the source API we've
+    actually verified. The earlier version of this list included synthetic
+    seeds (FTC-2024-0012, FDA-2023-N-1200, 23-562, 14-28-as-robocall) that
+    don't exist on regulations.gov / ECFS. When a reviewer clicked
+    "Request analysis" on one of those, the pipeline ingested zero rows and
+    the deployed Databricks notebook quietly reported SUCCESS. The fix is
+    to remove the synthetic ones entirely and lean on the validated set
+    below. Run `scripts/validate_discoveries.py` to re-verify any time.
+    """
+    log.info(
+        "Generating deterministic seed dockets for discovery (validated set only)..."
+    )
     return [
         {
-            "docket_id": "FTC-2024-0012",
+            "docket_id": "CFPB-2016-0025",
             "source": "regulations_gov",
-            "agency_id": "FTC",
-            "topic_id": "ai_regulation",
-            "title": "Algorithmic Transparency & Consumer Safety Rulemaking",
-            "summary": "Proposed rule requiring comprehensive audits and third-party risk analysis for large consumer-facing automated decision-making engines and consumer transparency standards.",
-            "comment_count_estimate": 45000,
-            "last_comment_date": "2026-05-20T18:00:00Z",
-            "tags": "AI, transparency, consumer safety",
-            "freshness_label": "Active",
+            "agency_id": "CFPB",
+            "topic_id": "consumer_finance",
+            "title": "Payday, Vehicle Title, and Certain High-Cost Installment Loans",
+            "summary": "CFPB rulemaking on small-dollar lending; 211,885 confirmed comments with documented coordinated campaigns.",
+            "comment_count_estimate": 211885,
+            "last_comment_date": "2016-10-07T23:59:00Z",
+            "tags": "consumer_finance, CFPB, payday",
+            "freshness_label": "Analyzed",
+        },
+        {
+            "docket_id": "17-108",
+            "source": "ecfs",
+            "agency_id": "FCC",
+            "topic_id": "telecom",
+            "title": "Restoring Internet Freedom (Net Neutrality)",
+            "summary": "FCC NPRM repealing 2015 Open Internet Order. Best-known case study for coordinated public comment campaigns; ~22M filings on record.",
+            "comment_count_estimate": 21800000,
+            "last_comment_date": "2018-08-30T23:59:00Z",
+            "tags": "telecom, FCC, net neutrality",
+            "freshness_label": "Analyzed",
         },
         {
             "docket_id": "FTC-2023-0007",
@@ -99,47 +123,23 @@ def generate_fallback_dockets() -> list[dict[str, Any]]:
             "agency_id": "FTC",
             "topic_id": "labor",
             "title": "Non-Compete Clause Ban and Workplace Freedom Rule",
-            "summary": "Comprehensive regulatory action to ban non-compete clauses in employment contracts nationwide, aiming to foster innovation and employee mobility.",
-            "comment_count_estimate": 260000,
-            "last_comment_date": "2026-05-24T14:30:00Z",
+            "summary": "FTC rule banning non-compete clauses in employment contracts. 20,697 comments confirmed via regulations.gov v4.",
+            "comment_count_estimate": 20697,
+            "last_comment_date": "2024-03-15T14:30:00Z",
             "tags": "labor, workplace, competition, non-compete",
             "freshness_label": "Active",
         },
         {
-            "docket_id": "FDA-2023-N-1200",
+            "docket_id": "EPA-HQ-OAR-2021-0317",
             "source": "regulations_gov",
-            "agency_id": "FDA",
-            "topic_id": "healthcare",
-            "title": "Clinical Trial Software Quality and Device Interface Standards",
-            "summary": "Oversight docket evaluating data reliability, electronic logging standards, and cybersecurity requirements for clinical trial hardware interfaces.",
-            "comment_count_estimate": 8500,
-            "last_comment_date": "2026-04-15T09:00:00Z",
-            "tags": "healthcare, FDA, software, devices",
+            "agency_id": "EPA",
+            "topic_id": "environment",
+            "title": "Standards of Performance for New, Reconstructed, and Modified Sources: Oil and Gas Sector",
+            "summary": "EPA methane rule for new oil and gas sources. Demoed in the Astroturf reviewer dossier at 1K-row sample.",
+            "comment_count_estimate": 6000,
+            "last_comment_date": "2022-02-15T23:59:00Z",
+            "tags": "environment, EPA, methane, oil_and_gas",
             "freshness_label": "Stale",
-        },
-        {
-            "docket_id": "23-562",
-            "source": "ecfs",
-            "agency_id": "FCC",
-            "topic_id": "ai_regulation",
-            "title": "Transparency and Disclosure in Algorithmic Ad Targeting",
-            "summary": "Inquiry regarding the role of automated media distribution platforms and algorithm disclosures for broadcast/narrowcast cable providers.",
-            "comment_count_estimate": 1200,
-            "last_comment_date": "2026-05-24T10:00:00Z",
-            "tags": "FCC, ECFS, AI, media, ad targeting",
-            "freshness_label": "Active",
-        },
-        {
-            "docket_id": "14-28",
-            "source": "ecfs",
-            "agency_id": "FCC",
-            "topic_id": "privacy",
-            "title": "Robocall Spoofing Prevention and Caller ID Privacy Protections",
-            "summary": "Active regulatory measures to implement STIR/SHAKEN standards and enforce severe penalty structures for predatory caller spoofing networks.",
-            "comment_count_estimate": 15000,
-            "last_comment_date": "2026-05-22T17:45:00Z",
-            "tags": "FCC, privacy, spoofing, robocalls",
-            "freshness_label": "Active",
         },
     ]
 

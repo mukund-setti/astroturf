@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { estimateRuntime, formatRuntime } from "@/lib/runtime-estimate";
 
 export interface DocketPreset {
   docketId: string;
@@ -47,6 +49,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [limit, setLimit] = useState("100");
+  const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "found" | "not_found">("idle");
 
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const selectedId = event.target.value;
@@ -63,6 +66,43 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
       setEndDate(found.endDate || "");
     }
   };
+
+  const lookupDocket = useCallback(async (id?: string) => {
+    const lookupId = (id ?? docketId).trim();
+    if (!lookupId || lookupId.length < 3) return;
+    setLookupStatus("loading");
+    try {
+      const res = await fetch("/api/docket-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docketId: lookupId }),
+      });
+      const data = await res.json();
+      if (data.found) {
+        setSource(data.source || source);
+        setTopicId(data.topicId || topicId);
+        setAgencyId(data.agencyId || agencyId);
+        setTitle(data.title || title);
+        setExpectedScale(data.expectedScale || expectedScale);
+        if (data.summary && (!notes || notes === "Registered from the Astroturf Analyze a docket workflow.")) {
+          setNotes(data.summary);
+        }
+        setLookupStatus("found");
+      } else {
+        setLookupStatus("not_found");
+      }
+    } catch {
+      setLookupStatus("not_found");
+    }
+  }, [docketId, source, topicId, agencyId, title, expectedScale, notes]);
+
+  const handleDocketIdBlur = useCallback(() => {
+    const trimmed = docketId.trim();
+    // Auto-lookup when the ID looks real: contains a hyphen or is 3+ digits
+    if (trimmed.length >= 3 && (trimmed.includes("-") || /^\d{3,}$/.test(trimmed))) {
+      lookupDocket(trimmed);
+    }
+  }, [docketId, lookupDocket]);
 
   const yamlSnippet = useMemo(() => {
     return [
@@ -101,6 +141,25 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
   }, [docketId]);
 
   const isComplete = Boolean(docketId && topicId && agencyId);
+
+  // Live ETA shown to the user as they tweak source / scale. The estimator
+  // returns honest numbers based on observed regulations.gov / ECFS pipeline
+  // rates. If the user hasn't entered a scale yet we fall back to 1000 just
+  // to show the order-of-magnitude shape; the actual quoted number updates
+  // the moment they type a real value.
+  const etaScale = (() => {
+    const n = Number(expectedScale);
+    if (!isNaN(n) && n > 0) return Math.floor(n);
+    return 1000;
+  })();
+  const etaSource =
+    source === "regulations_gov" || source === "ecfs"
+      ? (source as "regulations_gov" | "ecfs")
+      : "regulations_gov";
+  const etaEstimate = useMemo(
+    () => estimateRuntime(etaSource, etaScale),
+    [etaSource, etaScale],
+  );
 
   async function copyToClipboard(
     text: string,
@@ -255,6 +314,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
               onChange={handlePresetChange}
               value={docketId && knownDockets.some((d) => d.docketId === docketId) ? docketId : ""}
               className="h-10 w-full rounded-sm border border-rule bg-background px-3 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand/30 cursor-pointer"
+              suppressHydrationWarning
             >
               <option value="" disabled>-- Select a known docket --</option>
               {knownDockets.map((preset) => (
@@ -267,12 +327,57 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
         </div>
 
         <div className="space-y-4">
-          <TextField
-            label="Docket ID"
-            value={docketId}
-            onChange={setDocketId}
-            placeholder="EPA-HQ-OAR-2021-0317 or 17-108"
-          />
+          <label className="block">
+            <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Docket ID
+            </span>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={docketId}
+                onChange={(e) => {
+                  setDocketId(e.target.value);
+                  if (lookupStatus !== "idle") setLookupStatus("idle");
+                }}
+                onBlur={handleDocketIdBlur}
+                placeholder="EPA-HQ-OAR-2021-0317 or 17-108"
+                className="h-10 flex-1 rounded-sm border border-rule bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none focus:border-brand focus:ring-1 focus:ring-brand/30"
+                suppressHydrationWarning
+              />
+              <button
+                type="button"
+                suppressHydrationWarning
+                onClick={() => lookupDocket()}
+                disabled={!docketId.trim() || lookupStatus === "loading"}
+                className={cn(
+                  "h-10 px-3 rounded-sm text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap",
+                  lookupStatus === "loading"
+                    ? "bg-secondary text-muted-foreground cursor-wait"
+                    : lookupStatus === "found"
+                    ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500"
+                    : docketId.trim()
+                    ? "border border-brand/40 text-brand hover:bg-brand/5 cursor-pointer"
+                    : "bg-secondary text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                {lookupStatus === "loading"
+                  ? "Looking up…"
+                  : lookupStatus === "found"
+                  ? "✓ Found"
+                  : "Lookup"}
+              </button>
+            </div>
+            {lookupStatus === "found" && (
+              <span className="block mt-1 text-[10px] text-emerald-500">
+                Fields auto-filled from catalog.
+              </span>
+            )}
+            {lookupStatus === "not_found" && (
+              <span className="block mt-1 text-[10px] text-muted-foreground">
+                Not in catalog — fill fields manually or submit to discover.
+              </span>
+            )}
+          </label>
           <SelectField
             label="Source"
             value={source}
@@ -325,6 +430,48 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
           />
         </div>
 
+        {/* Honest runtime estimate shown before the user fires anything off,
+            so they aren't surprised by a 4-hour wait after one click. The
+            numbers come from ui/lib/runtime-estimate.ts which is calibrated
+            against observed regulations.gov and ECFS pipeline rates. */}
+        {isComplete && (
+          <div className="mt-6 p-4 border border-rule rounded-sm bg-secondary/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground font-semibold">
+                Estimated runtime
+              </span>
+              <span className="font-display text-lg font-semibold text-foreground">
+                {formatRuntime(etaEstimate.totalMinutes)}
+              </span>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              {etaEstimate.bottleneckReason} Bottleneck stage:{" "}
+              <strong className="text-foreground">{etaEstimate.bottleneckStage}</strong>.
+            </p>
+            <div className="grid grid-cols-6 gap-1 text-[9px] text-center font-mono">
+              {(
+                ["setup", "ingestion", "parsing", "embedding", "clustering", "export"] as const
+              ).map((stage) => (
+                <div key={stage} className="px-1 py-1 bg-background border border-rule rounded-sm">
+                  <div className="text-muted-foreground uppercase tracking-wider mb-0.5">
+                    {stage.slice(0, 4)}
+                  </div>
+                  <div className="text-foreground font-semibold">
+                    {formatRuntime(etaEstimate.stageMinutes[stage])}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {etaEstimate.warnings.length > 0 && (
+              <ul className="mt-2 space-y-1 text-[10px] text-amber-500 leading-snug">
+                {etaEstimate.warnings.map((w, i) => (
+                  <li key={i}>· {w}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* Execution Settings and Trigger buttons */}
         <div className="mt-6 pt-6 border-t border-rule space-y-4">
           <h3 className="font-sans text-[11px] uppercase tracking-wider text-foreground font-semibold">
@@ -368,6 +515,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             {executionMode === "databricks_job" ? (
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={handleRegisterAndRunHosted}
                 disabled={!isComplete || isSubmitting}
                 className={
@@ -382,6 +530,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             ) : executionMode === "local_process" ? (
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={handleRegisterAndRunLocal}
                 disabled={!isComplete || isSubmitting}
                 className={
@@ -396,6 +545,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             ) : (
               <button
                 type="button"
+                suppressHydrationWarning
                 onClick={handleRegisterDocketOnly}
                 disabled={!isComplete || isSubmitting}
                 className={
@@ -411,6 +561,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
 
             <button
               type="button"
+              suppressHydrationWarning
               onClick={() => copyToClipboard(yamlSnippet, setYamlCopied)}
               disabled={!isComplete}
               className={
@@ -473,6 +624,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             </h2>
             <button
               type="button"
+              suppressHydrationWarning
               onClick={() => copyToClipboard(yamlSnippet, setYamlCopied)}
               className="text-[10px] uppercase tracking-wider bg-secondary text-foreground/80 px-2 py-1 rounded-sm hover:bg-muted transition-colors cursor-pointer"
             >
@@ -491,6 +643,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             </h2>
             <button
               type="button"
+              suppressHydrationWarning
               onClick={() => copyToClipboard(commandSnippet, setCommandsCopied)}
               className="text-[10px] uppercase tracking-wider bg-secondary text-foreground/80 px-2 py-1 rounded-sm hover:bg-muted transition-colors cursor-pointer"
             >
@@ -536,6 +689,7 @@ function TextField({
         onChange={handleChange}
         placeholder={placeholder}
         className="h-10 w-full rounded-sm border border-rule bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none focus:border-brand focus:ring-1 focus:ring-brand/30"
+        suppressHydrationWarning
       />
     </label>
   );
@@ -564,6 +718,7 @@ function SelectField({
         value={value}
         onChange={handleChange}
         className="h-10 w-full rounded-sm border border-rule bg-background px-3 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand/30"
+        suppressHydrationWarning
       >
         {options.map((option) => (
           <option key={option} value={option}>

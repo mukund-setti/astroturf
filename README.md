@@ -140,7 +140,7 @@ uv sync
 
 We enforce rigorous coding standards across our pipeline. All unit and integration tests run locally:
 * **Linting & Formatting**: Clean Ruff check and strict Black-style code.
-* **Testing Harness**: 169 tests passing locally:
+* **Testing Harness**: 203 backend tests passing locally (5 skipped — opt-in Spark integration suite), plus a clean Next.js typecheck + lint + build:
   ```powershell
   .uv-test-venv\Scripts\python.exe -m pytest
   ```

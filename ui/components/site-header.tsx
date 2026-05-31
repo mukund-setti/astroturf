@@ -13,31 +13,25 @@ export function SiteHeader({ backHref, backLabel }: SiteHeaderProps) {
   const diagnostics = getDataDiagnostics();
 
   return (
-    <header className="border-b border-rule bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-8">
+    <header className="sticky top-0 z-30 border-b border-rule/60 bg-background/85 backdrop-blur-md">
+      <div className="mx-auto max-w-6xl px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-7">
           <Link
             href="/"
-            className="font-display text-lg tracking-tight text-foreground hover:text-brand transition-colors"
+            className="group flex items-center gap-2 font-display text-lg tracking-tight text-foreground"
           >
-            Astroturf
+            <span
+              aria-hidden="true"
+              className="inline-block h-2 w-2 rounded-full bg-brand transition-transform duration-200 group-hover:scale-125"
+            />
+            <span className="group-hover:text-brand transition-colors">Astroturf</span>
           </Link>
-          <nav className="flex items-center gap-5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
-            <Link href="/discoveries" className="hover:text-brand transition-colors">
-              Discoveries
-            </Link>
-            <Link href="/watchlist" className="hover:text-brand transition-colors">
-              Watchlist
-            </Link>
-            <Link href="/monitor" className="hover:text-brand transition-colors">
-              Monitor
-            </Link>
-            <Link href="/analyze" className="hover:text-brand transition-colors">
-              Advanced Config
-            </Link>
-            <Link href="/analysis" className="hover:text-brand transition-colors">
-              Job Queue
-            </Link>
+          <nav className="hidden md:flex items-center gap-1 text-sm text-muted-foreground">
+            <NavLink href="/discoveries">Discoveries</NavLink>
+            <NavLink href="/watchlist">Watchlist</NavLink>
+            <NavLink href="/monitor">Monitor</NavLink>
+            <NavLink href="/analyze">Advanced</NavLink>
+            <NavLink href="/analysis">Queue</NavLink>
           </nav>
         </div>
 
@@ -45,20 +39,35 @@ export function SiteHeader({ backHref, backLabel }: SiteHeaderProps) {
           <Link
             href={backHref}
             className={cn(
-              "text-[11px] uppercase tracking-[0.18em] text-muted-foreground",
-              "hover:text-brand transition-colors",
+              "text-sm text-muted-foreground hover:text-brand transition-colors",
+              "inline-flex items-center gap-1.5",
             )}
           >
-            ← {backLabel ?? "Back"}
+            <span aria-hidden="true">←</span>
+            <span>{backLabel ?? "Back"}</span>
           </Link>
         ) : null}
       </div>
-      <div className="border-t border-rule/60 bg-card/40">
-        <div className="mx-auto max-w-6xl px-6 py-1.5 flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          <span>{dataSourceLabel}</span>
+      <div className="border-t border-rule/40 bg-card/50">
+        <div className="mx-auto max-w-6xl px-6 py-1.5 flex items-center justify-between gap-4 text-xs text-muted-foreground/80">
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
+            <span>{dataSourceLabel}</span>
+          </span>
           <DataDiagnostics diagnostics={diagnostics} />
         </div>
       </div>
     </header>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary/60 transition-colors"
+    >
+      {children}
+    </Link>
   );
 }

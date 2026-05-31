@@ -47,57 +47,84 @@
   --color-brand-soft: var(--brand-soft);
   --color-rule: var(--rule);
 
-  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) * 1.5);
   --radius-xl: calc(var(--radius) * 2);
   --radius-2xl: calc(var(--radius) * 3);
   --radius-3xl: calc(var(--radius) * 4);
   --radius-4xl: calc(var(--radius) * 5);
+
+  /* Expose layered shadows as Tailwind utilities: shadow-soft / shadow-soft-hover. */
+  --shadow-soft:
+    0 1px 0 0 rgba(21, 22, 28, 0.04),
+    0 1px 2px 0 rgba(21, 22, 28, 0.05),
+    0 4px 12px -4px rgba(21, 22, 28, 0.07);
+  --shadow-soft-hover:
+    0 1px 0 0 rgba(21, 22, 28, 0.05),
+    0 2px 4px 0 rgba(21, 22, 28, 0.06),
+    0 12px 28px -6px rgba(21, 22, 28, 0.12);
 }
 
 :root {
-  /* Warm-paper neutrals + single burnt-orange accent. */
-  --background: #f7f4ee;
-  --foreground: #1a1714;
+  /* Cooler neutral paper + confident indigo brand. The previous burnt-orange
+     on warm cream read as "Anthropic Claude default editorial," which is
+     exactly what we don't want for a Databricks-application demo. Indigo is
+     polished, civic-coded, and breaks completely from that aesthetic. */
+  --background: #f8f7f4;
+  --foreground: #15161c;
   --card: #ffffff;
-  --card-foreground: #1a1714;
+  --card-foreground: #15161c;
   --popover: #ffffff;
-  --popover-foreground: #1a1714;
-  --primary: #1a1714;
-  --primary-foreground: #f7f4ee;
-  --secondary: #efeae0;
-  --secondary-foreground: #1a1714;
-  --muted: #efeae0;
-  --muted-foreground: #5b544c;
-  --accent: #efeae0;
-  --accent-foreground: #1a1714;
+  --popover-foreground: #15161c;
+  --primary: #15161c;
+  --primary-foreground: #f8f7f4;
+  --secondary: #ecebe6;
+  --secondary-foreground: #15161c;
+  --muted: #ecebe6;
+  --muted-foreground: #56565f;
+  --accent: #ecebe6;
+  --accent-foreground: #15161c;
+  /* Destructive stays warm so error states feel distinct from the brand. */
   --destructive: #b23a1c;
-  --border: #e5dfd4;
-  --input: #e5dfd4;
-  --ring: #b23a1c;
+  --border: #e2e1dc;
+  --input: #e2e1dc;
+  --ring: #4338ca;
 
-  /* Custom journalism-data tokens. */
-  --brand: #b23a1c;
-  --brand-soft: #f2e4de;
-  --rule: #e5dfd4;
+  /* Brand: indigo-700 with a soft indigo-100 fill. */
+  --brand: #4338ca;
+  --brand-soft: #e7e5fa;
+  --rule: #e2e1dc;
 
-  --chart-1: #1a1714;
-  --chart-2: #5b544c;
-  --chart-3: #b23a1c;
-  --chart-4: #c98c6b;
-  --chart-5: #efeae0;
+  --chart-1: #15161c;
+  --chart-2: #56565f;
+  --chart-3: #4338ca;
+  --chart-4: #8b85e8;
+  --chart-5: #ecebe6;
 
-  --radius: 0.25rem;
+  /* Larger baseline radius so cards feel like cards, not Excel cells. */
+  --radius: 0.625rem;
 
-  --sidebar: #f7f4ee;
-  --sidebar-foreground: #1a1714;
-  --sidebar-primary: #1a1714;
-  --sidebar-primary-foreground: #f7f4ee;
-  --sidebar-accent: #efeae0;
-  --sidebar-accent-foreground: #1a1714;
-  --sidebar-border: #e5dfd4;
-  --sidebar-ring: #b23a1c;
+  /* Layered soft shadows for warmth and depth without harsh edges. */
+  --shadow-soft:
+    0 1px 0 0 rgba(21, 22, 28, 0.04),
+    0 1px 2px 0 rgba(21, 22, 28, 0.05),
+    0 4px 12px -4px rgba(21, 22, 28, 0.07);
+  --shadow-soft-hover:
+    0 1px 0 0 rgba(21, 22, 28, 0.05),
+    0 2px 4px 0 rgba(21, 22, 28, 0.06),
+    0 12px 28px -6px rgba(21, 22, 28, 0.12);
+  --shadow-inset-rule:
+    inset 0 -1px 0 0 rgba(229, 223, 212, 0.7);
+
+  --sidebar: #f8f7f4;
+  --sidebar-foreground: #15161c;
+  --sidebar-primary: #15161c;
+  --sidebar-primary-foreground: #f8f7f4;
+  --sidebar-accent: #ecebe6;
+  --sidebar-accent-foreground: #15161c;
+  --sidebar-border: #e2e1dc;
+  --sidebar-ring: #4338ca;
 }
 
 @layer base {

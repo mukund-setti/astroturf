@@ -49,3 +49,21 @@ export async function query<T = any>(text: string, params?: any[]): Promise<T[]>
   const res = await db.query(text, params);
   return res.rows;
 }
+
+// Node-level error codes that mean "the database is unreachable" as opposed to
+// "the query was bad." Used by the store layers to decide whether to degrade
+// gracefully (read returns empty) or fail loudly (schema mismatch, bad SQL).
+const CONNECTION_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ENETUNREACH",
+  "EAI_AGAIN",
+]);
+
+export function isConnectionError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" && CONNECTION_ERROR_CODES.has(code);
+}

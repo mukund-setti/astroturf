@@ -7,16 +7,37 @@ import { formatInt } from "@/lib/format";
 import type { DiscoveredDocket } from "@/lib/docket-catalog";
 import type { AnalysisRequest } from "@/lib/analysis-store";
 
+type ExecutionMode = "command" | "local_process" | "databricks_job";
+
 interface MonitorClientProps {
   monitoredDockets: DiscoveredDocket[];
   analysisRequests: AnalysisRequest[];
-  executionMode?: "command" | "local_process" | "databricks_job";
+  executionMode?: ExecutionMode;
 }
+
+// Where the "Trigger Autopilot Sweep" button will send the request. Surfaced
+// next to the button so reviewers see whether a click submits a real
+// Databricks job, spawns a local python process, or is a no-op.
+const EXECUTION_MODE_BADGE: Record<ExecutionMode, { label: string; className: string }> = {
+  databricks_job: {
+    label: "Runs on Databricks",
+    className: "bg-green-500/10 border-green-500/20 text-green-600",
+  },
+  local_process: {
+    label: "Spawns local process",
+    className: "bg-blue-500/10 border-blue-500/20 text-blue-600",
+  },
+  command: {
+    label: "Command-only (no execution)",
+    className: "bg-amber-500/10 border-amber-500/20 text-amber-600",
+  },
+};
 
 export function MonitorClient({ monitoredDockets, analysisRequests, executionMode = "command" }: MonitorClientProps) {
   const [activeTab, setActiveTab] = useState<"dockets" | "jobs">("dockets");
   const [isSwiping, setIsSwiping] = useState(false);
   const [swipeStatus, setSwipeStatus] = useState<string | null>(null);
+  const modeBadge = EXECUTION_MODE_BADGE[executionMode];
 
   const handleAutopilotSwipe = async () => {
     setIsSwiping(true);
@@ -80,6 +101,15 @@ export function MonitorClient({ monitoredDockets, analysisRequests, executionMod
               {swipeStatus}
             </span>
           )}
+          <span
+            className={cn(
+              "text-[10px] uppercase font-sans tracking-wider px-2 py-0.5 rounded-sm font-bold border",
+              modeBadge.className
+            )}
+            title="Execution mode in effect when you click Trigger Autopilot Sweep."
+          >
+            {modeBadge.label}
+          </span>
           <button
             onClick={handleAutopilotSwipe}
             disabled={isSwiping}

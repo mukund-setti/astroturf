@@ -10,10 +10,14 @@ const STEPS: Step[] = [
     title: "Ingest",
     body: (
       <>
-        Public comments are pulled from regulations.gov via the official API,
-        with cursor-based pagination and exponential-backoff retries. Data
-        lands in a Delta Lake bronze table on Databricks Unity Catalog, with
-        full provenance and idempotent re-runs.
+        Public comments are pulled from{" "}
+        <strong className="text-foreground">two federal sources</strong>:
+        regulations.gov v4 (CFPB, EPA, FTC, FDA, ...) and the FCC ECFS public
+        API (telecom dockets). Cursor-based pagination, exponential-backoff
+        retries, and a shared <code className="font-mono text-[0.95em] text-foreground">api.data.gov</code>{" "}
+        rate-limit budget. Data lands in a Delta Lake bronze table on
+        Databricks Unity Catalog with full provenance, idempotent re-runs,
+        and an MLflow run per ingestion.
       </>
     ),
   },
@@ -23,7 +27,10 @@ const STEPS: Step[] = [
       <>
         Comments are normalized through a medallion architecture (bronze to
         silver). HTML cleaning, attachment cataloging, and detail-level
-        enrichment use Databricks Workflows for orchestration.
+        enrichment run as a Databricks Workflow, source-aware: ECFS rows
+        skip the detail-fetch round-trip because their bodies are already
+        plain text, while regulations.gov rows fan out per-comment detail
+        requests under the rate-limit budget.
       </>
     ),
   },
@@ -45,10 +52,29 @@ const STEPS: Step[] = [
     title: "Cluster",
     body: (
       <>
-        Pairwise cosine similarity over the Vector Search index identifies
-        clusters of textually similar comments above a tunable threshold.
-        Cluster assignments and template comments are written to gold Delta
-        tables.
+        A two-stage clusterer collapses the {" "}
+        <code className="font-mono text-[0.95em] text-foreground">O(N²)</code>{" "}
+        comparison space: <strong className="text-foreground">MinHash/LSH</strong>{" "}
+        on token shingles generates candidate pairs; cosine similarity over
+        the Vector Search index confirms semantic neighbors above a tunable
+        threshold (default 0.92). Cluster assignments and representative
+        templates land in gold Delta tables, joined with cluster sizes and
+        date spans for the UI.
+      </>
+    ),
+  },
+  {
+    title: "Attribute and trace",
+    body: (
+      <>
+        Two evidence-packet agents read from gold: the{" "}
+        <strong className="text-foreground">AttributionAgent</strong> assembles
+        candidate campaign sponsors from a curated advocacy registry
+        (offline-seed today; tool-using LLM mode behind an ADR), and the{" "}
+        <strong className="text-foreground">MigrationAgent</strong> compares
+        cluster template language against the final agency rule text to
+        flag phrase-level migration. Both write capped-confidence,
+        caveat-bearing rows — never silent accusations.
       </>
     ),
   },
@@ -56,11 +82,18 @@ const STEPS: Step[] = [
     title: "Serve",
     body: (
       <>
-        Findings are exported to{" "}
+        Findings are denormalized into{" "}
         <code className="font-mono text-[0.95em] text-foreground">
-          workspace.demo.cluster_review_export
+          astroturf.demo.cluster_review_export
         </code>{" "}
-        and queried live from this UI via the Databricks SQL Connector.
+        and queried live from this Next.js UI via the Databricks SQL Connector.
+        A Postgres control plane (Supabase) tracks analysis-request lifecycle,
+        Databricks job IDs, and source-validated docket discoveries so the UI
+        can poll{" "}
+        <code className="font-mono text-[0.95em] text-foreground">
+          /api/analysis/[id]/progress
+        </code>{" "}
+        every 10s with per-stage row counts.
       </>
     ),
   },

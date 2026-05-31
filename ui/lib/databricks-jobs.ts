@@ -56,6 +56,13 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
   // for such jobs with "Cannot use legacy parameters ... because the job has job
   // parameters configured." So we send job_parameters: a flat string->string map
   // that the notebook reads via dbutils.widgets.get(...).
+  //
+  // CRITICAL: every widget the notebook reads must be pinned here. Any widget
+  // we omit can be quietly overridden by stale notebook-task base_parameters
+  // left in the workspace job definition (e.g. a manual smoke test that pinned
+  // dry_run="true"), which causes the notebook to exit early with SUCCESS but
+  // zero rows. Job parameters take precedence over base_parameters at runtime,
+  // so pinning them defensively here is the correct guard.
   const payload = {
     job_id: parseInt(jobId, 10),
     job_parameters: {
@@ -78,6 +85,11 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
       ),
       vector_index_name: getEnvOrDefault("DATABRICKS_VECTOR_INDEX_NAME", ""),
       clustering_mode: getEnvOrDefault("ASTROTURF_CLUSTERING_MODE", "vector_search"),
+      similarity_threshold: getEnvOrDefault("ASTROTURF_SIMILARITY_THRESHOLD", "0.92"),
+      // Hard-pin dry_run so a stale workspace base_parameter (e.g. left over
+      // from a manual smoke test) cannot silently turn a real /analyze
+      // submission into a zero-row no-op.
+      dry_run: "false",
     },
   };
 
@@ -152,5 +164,55 @@ export async function getRunStatus(runId: string): Promise<DatabricksRunResponse
   } catch (err) {
     console.error(`Failed to fetch Databricks run status for runId ${runId}:`, err);
     throw err;
+  }
+}
+
+/**
+ * Fetches a notebook task's exit message (the string passed to
+ * dbutils.notebook.exit). Returns null if the API does not surface one or the
+ * fetch fails — callers should treat absence as "no exit message available"
+ * rather than as an error, because this is purely diagnostic.
+ *
+ * For a multi-task job run we walk the first task's run_id, because that is
+ * where the notebook_output lives. The parent job run's get-output endpoint
+ * returns no notebook_output for multi-task jobs.
+ */
+export async function getNotebookExitMessage(parentRunId: string): Promise<string | null> {
+  let host: string;
+  let token: string;
+  try {
+    host = getEnvOrThrow("DATABRICKS_HOST");
+    token = getEnvOrThrow("DATABRICKS_TOKEN");
+  } catch {
+    return null;
+  }
+
+  if (!host.startsWith("http://") && !host.startsWith("https://")) {
+    host = `https://${host}`;
+  }
+  host = host.replace(/\/$/, "");
+
+  try {
+    const runRes = await fetch(`${host}/api/2.1/jobs/runs/get?run_id=${parentRunId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!runRes.ok) return null;
+    const runData = (await runRes.json()) as { tasks?: Array<{ run_id?: number | string }> };
+    const taskRunId = runData.tasks?.[0]?.run_id;
+    if (taskRunId === undefined || taskRunId === null) return null;
+
+    const outRes = await fetch(
+      `${host}/api/2.1/jobs/runs/get-output?run_id=${taskRunId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!outRes.ok) return null;
+    const outData = (await outRes.json()) as {
+      notebook_output?: { result?: string | null };
+    };
+    const result = outData.notebook_output?.result;
+    return typeof result === "string" && result.trim().length > 0 ? result : null;
+  } catch (err) {
+    console.warn(`Failed to fetch notebook exit message for parent run ${parentRunId}:`, err);
+    return null;
   }
 }

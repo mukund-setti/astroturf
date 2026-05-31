@@ -1,4 +1,8 @@
-"""Delta-rs helpers for local gold writes."""
+"""Gold layer Delta writers for clusters and cluster memberships.
+
+Dispatches to the active backend per ``shared.delta_utils.backend`` (see
+ADR-0017 for the local-vs-Databricks split).
+"""
 
 from __future__ import annotations
 
@@ -8,8 +12,7 @@ from pathlib import Path
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 
-from shared.delta_utils.silver import ensure_schema
-from shared.delta_utils.fuse_bypass import local_tmp_delta_path
+from shared.delta_utils.backend import should_use_spark
 
 log = logging.getLogger(__name__)
 
@@ -23,29 +26,40 @@ def _initialize_if_needed(path: str | Path, schema: pa.Schema) -> None:
     log.info("Initialised Delta table at %s", path_str)
 
 
-def _merge_with_predicate(
+def _delta_rs_merge_with_predicate(
     path: str | Path,
     arrow_table: pa.Table,
     predicate: str,
 ) -> dict[str, int]:
-    with local_tmp_delta_path(path) as local_path:
-        _initialize_if_needed(local_path, arrow_table.schema)
-        dt = DeltaTable(str(local_path))
-        metrics = (
-            dt.merge(
-                source=arrow_table,
-                predicate=predicate,
-                source_alias="source",
-                target_alias="target",
-            )
-            .when_matched_update_all()
-            .when_not_matched_insert_all()
-            .execute()
+    _initialize_if_needed(path, arrow_table.schema)
+    dt = DeltaTable(str(path))
+    metrics = (
+        dt.merge(
+            source=arrow_table,
+            predicate=predicate,
+            source_alias="source",
+            target_alias="target",
         )
-        return {
-            "inserted": int(metrics.get("num_target_rows_inserted", 0)),
-            "updated": int(metrics.get("num_target_rows_updated", 0)),
-        }
+        .when_matched_update_all()
+        .when_not_matched_insert_all()
+        .execute()
+    )
+    return {
+        "inserted": int(metrics.get("num_target_rows_inserted", 0)),
+        "updated": int(metrics.get("num_target_rows_updated", 0)),
+    }
+
+
+def _dispatch_merge(
+    path: str | Path,
+    arrow_table: pa.Table,
+    predicate: str,
+) -> dict[str, int]:
+    if should_use_spark(path):
+        from shared.delta_utils.spark_writers import spark_merge
+
+        return spark_merge(path, arrow_table, predicate)
+    return _delta_rs_merge_with_predicate(path, arrow_table, predicate)
 
 
 def _scope_predicate(
@@ -77,19 +91,28 @@ def delete_clustering_scope(
     similarity_threshold: float,
 ) -> int:
     """Delete prior deterministic clustering output for an exact run scope."""
-    with local_tmp_delta_path(path) as local_path:
-        _initialize_if_needed(local_path, schema)
-        ensure_schema(local_path, schema, allow_destructive=True)
-        dt = DeltaTable(str(local_path))
-        metrics = dt.delete(
-            predicate=_scope_predicate(
-                docket_id=docket_id,
-                embedding_model=embedding_model,
-                clustering_version=clustering_version,
-                similarity_threshold=similarity_threshold,
-            )
+    predicate = _scope_predicate(
+        docket_id=docket_id,
+        embedding_model=embedding_model,
+        clustering_version=clustering_version,
+        similarity_threshold=similarity_threshold,
+    )
+    if should_use_spark(path):
+        from shared.delta_utils.spark_writers import (
+            spark_delete,
+            spark_ensure_path_initialized,
         )
-        return int(metrics.get("num_deleted_rows", 0))
+
+        spark_ensure_path_initialized(path, schema)
+        return spark_delete(path, predicate)
+
+    from shared.delta_utils.silver import ensure_schema
+
+    _initialize_if_needed(path, schema)
+    ensure_schema(path, schema, allow_destructive=True)
+    dt = DeltaTable(str(path))
+    metrics = dt.delete(predicate=predicate)
+    return int(metrics.get("num_deleted_rows", 0))
 
 
 def merge_comment_clusters(
@@ -97,7 +120,7 @@ def merge_comment_clusters(
     arrow_table: pa.Table,
 ) -> dict[str, int]:
     """Idempotent upsert into gold.comment_clusters by cluster_id."""
-    return _merge_with_predicate(
+    return _dispatch_merge(
         path,
         arrow_table,
         "target.cluster_id = source.cluster_id",
@@ -109,7 +132,7 @@ def merge_comment_cluster_memberships(
     arrow_table: pa.Table,
 ) -> dict[str, int]:
     """Idempotent upsert into gold.comment_cluster_memberships by compound key."""
-    return _merge_with_predicate(
+    return _dispatch_merge(
         path,
         arrow_table,
         "target.cluster_id = source.cluster_id "

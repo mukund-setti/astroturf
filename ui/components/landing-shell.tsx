@@ -37,14 +37,27 @@ export function LandingShell({
 
   return (
     <>
-      <header className="border-b border-rule bg-background relative z-30">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="font-display text-lg tracking-tight text-foreground hover:text-brand transition-colors"
-          >
-            Astroturf
-          </Link>
+      <header className="sticky top-0 z-30 border-b border-rule/60 bg-background/85 backdrop-blur-md">
+        <div className="mx-auto max-w-6xl px-6 py-3.5 flex items-center justify-between gap-6">
+          <div className="flex items-center gap-7 min-w-0">
+            <Link
+              href="/"
+              className="group flex items-center gap-2 font-display text-lg tracking-tight text-foreground shrink-0"
+            >
+              <span
+                aria-hidden="true"
+                className="inline-block h-2 w-2 rounded-full bg-brand transition-transform duration-200 group-hover:scale-125"
+              />
+              <span className="group-hover:text-brand transition-colors">Astroturf</span>
+            </Link>
+            <nav className="hidden md:flex items-center gap-1 text-sm">
+              <NavLink href="/discoveries">Discoveries</NavLink>
+              <NavLink href="/watchlist">Watchlist</NavLink>
+              <NavLink href="/monitor">Monitor</NavLink>
+              <NavLink href="/analyze">Advanced</NavLink>
+              <NavLink href="/analysis">Queue</NavLink>
+            </nav>
+          </div>
 
           <SearchAutocomplete
             clusters={clusters}
@@ -53,9 +66,12 @@ export function LandingShell({
           />
         </div>
         {dataSourceLabel ? (
-          <div className="border-t border-rule/60 bg-card/40">
-            <div className="mx-auto max-w-6xl px-6 py-1.5 flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              <span>{dataSourceLabel}</span>
+          <div className="border-t border-rule/40 bg-card/50">
+            <div className="mx-auto max-w-6xl px-6 py-1.5 flex items-center justify-between gap-4 text-xs text-muted-foreground/80">
+              <span className="inline-flex items-center gap-2">
+                <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500/70" />
+                <span>{dataSourceLabel}</span>
+              </span>
               {diagnostics ? <DataDiagnostics diagnostics={diagnostics} /> : null}
             </div>
           </div>
@@ -70,5 +86,16 @@ export function LandingShell({
         {afterGrid}
       </main>
     </>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-md px-2.5 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground hover:bg-secondary/60 transition-colors"
+    >
+      {children}
+    </Link>
   );
 }
