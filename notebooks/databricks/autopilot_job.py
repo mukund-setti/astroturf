@@ -18,7 +18,7 @@
 dbutils.widgets.text("catalog", "astroturf", "Unity Catalog name")
 dbutils.widgets.text(
     "repo_path",
-    "/Workspace/Users/mukund.setti@gmail.com/astroturf",
+    "/Workspace/Repos/<user-or-service-principal>/astroturf",
     "Repo working directory",
 )
 dbutils.widgets.dropdown(

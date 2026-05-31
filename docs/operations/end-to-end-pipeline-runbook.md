@@ -2,14 +2,14 @@
 
 This runbook separates the local development path from the Databricks production path. The production path has been live-validated inside Databricks Serverless notebook tasks.
 
-> Docket entries in [`configs/dockets.yaml`](../configs/dockets.yaml) carry a
+> Docket entries in [`configs/dockets.yaml`](../../configs/dockets.yaml) carry a
 > `processing_status` enforced by
-> [`scripts/run_docket_pipeline.py`](../scripts/run_docket_pipeline.py)'s
+> [`scripts/run_docket_pipeline.py`](../../scripts/run_docket_pipeline.py)'s
 > `ALLOWED_PROCESSING_STATUSES`. The five values are
 > `configured_awaiting_run`, `queued`, `partially_processed`, `baseline_only`,
 > and `analyzed`. The mapping to UI labels and tiers is documented in
-> [`docs/product-vision.md`](product-vision.md) and
-> [`docs/ui-information-architecture.md`](ui-information-architecture.md).
+> [`docs/product/product-vision.md`](../product/product-vision.md) and
+> [`docs/product/ui-information-architecture.md`](../product/ui-information-architecture.md).
 
 ## Local Development Path
 
@@ -46,8 +46,8 @@ Local scripts remain useful for development runs:
 ### Optional: Attribution and Migration (Phase 8, evidence layer)
 
 Both are optional. They produce evidence packets, not accusations — see
-[ADR-0015](decisions/0015-attribution-and-migration-agents.md) and
-[`docs/attribution-and-migration-methodology.md`](attribution-and-migration-methodology.md).
+[ADR-0015](../decisions/0015-attribution-and-migration-agents.md) and
+[`docs/methodology/attribution-and-migration.md`](../methodology/attribution-and-migration.md).
 
 ```powershell
 .uv-test-venv\Scripts\python.exe scripts\run_attribution.py `
@@ -80,14 +80,10 @@ Run tasks in this order:
 3. `cluster`
 4. `export_dashboard_data`
 
-For the validated FCC `17-108` production slice, the successful live run IDs were:
-
-| Task | Run ID |
-| --- | --- |
-| `load_sample_tables` | `916653215561127` |
-| `embed` | `546125942192140` |
-| `cluster` | `1028362756517371` |
-| `export_dashboard_data` | `156035613634033` |
+For the validated FCC `17-108` production slice, the private Databricks run
+IDs are intentionally omitted from the public repository. Re-run the task order
+above in your own workspace and inspect the resulting job run graph and MLflow
+runs.
 
 The cluster task used `clustering_mode="vector_search"`.
 
@@ -125,7 +121,7 @@ Each agent run emits MLflow metrics, inputs, row counts, and timing. In Databric
 3. Follow the MLflow run link or open the workspace experiment used by the task.
 4. Verify input parameters, output row-count metrics, timing, and task status.
 
-The key production run IDs to inspect are `916653215561127`, `546125942192140`, `1028362756517371`, and `156035613634033`.
+Inspect the job run graph and MLflow links produced by your own workspace run.
 
 ## Refresh Demo Export Table
 
@@ -218,8 +214,8 @@ To submit runs directly to your cloud compute from the UI, configure these envir
 ```bash
 ASTROTURF_EXECUTION_MODE=databricks_job
 DATABRICKS_JOB_ID="<web-analysis-job-id>"
-DATABRICKS_HOST="https://<your-databricks-instance>.cloud.databricks.com"
-DATABRICKS_TOKEN="dapi****************"
+DATABRICKS_HOST="https://<databricks-workspace-host>"
+DATABRICKS_TOKEN="<databricks-token>"
 DATABRICKS_CATALOG="astroturf"
 DATABRICKS_DATA_ROOT="/Volumes/astroturf/demo/exports/_lakehouse"
 DATABRICKS_REPO_PATH="/Workspace/Repos/<user>/astroturf"
@@ -253,7 +249,7 @@ Ensure you configure the following variables in your hosted environment:
 ASTROTURF_DEPLOYMENT_MODE=production
 
 # Provide standard PostgreSQL connection URL (e.g. Neon, Supabase, Vercel Postgres, Railway)
-DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require
+DATABASE_URL="<postgres-connection-url-with-ssl>"
 ```
 
 ### Relational Database Migrations

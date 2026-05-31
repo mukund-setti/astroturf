@@ -64,7 +64,7 @@ stage. If no data exists, it helps the user start ingestion.
 
 The UI's `CoverageStatus` is a separate vocabulary from the backend
 `processing_status` enforced in
-[`scripts/run_docket_pipeline.py`](../scripts/run_docket_pipeline.py)
+[`scripts/run_docket_pipeline.py`](../../scripts/run_docket_pipeline.py)
 (`ALLOWED_PROCESSING_STATUSES`). They map as follows:
 
 | Backend `processing_status` | UI `CoverageStatus` | UI label |

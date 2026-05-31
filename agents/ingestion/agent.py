@@ -7,7 +7,7 @@ Dispatches by ``IngestionInput.source``:
 - ``"ecfs"``: FCC ECFS public API (``agents/ingestion/sources/ecfs.py``).
   Offset+limit pagination, Lucene ``q=`` date filter.
 
-See docs/architecture.md, ADR-0002 (local Delta), ADR-0012 (multi-source
+See docs/architecture/architecture.md, ADR-0002 (local Delta), ADR-0012 (multi-source
 bronze unification).
 """
 

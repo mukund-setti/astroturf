@@ -34,7 +34,7 @@ export function getDbPool(): Pool {
   });
 
   pool.on("error", (err) => {
-    console.error("Unexpected PostgreSQL client pool error:", err);
+    console.error("Unexpected PostgreSQL client pool error:", sanitizeDatabaseError(err));
   });
 
   return pool;
@@ -66,4 +66,13 @@ export function isConnectionError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const code = (err as { code?: unknown }).code;
   return typeof code === "string" && CONNECTION_ERROR_CODES.has(code);
+}
+
+export function sanitizeDatabaseError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message
+    .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "<postgres-connection-url>")
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<database-host>")
+    .replace(/port:\s*\d+/gi, "port: <port>")
+    .replace(/password=[^\s]+/gi, "password=<redacted>");
 }

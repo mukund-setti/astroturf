@@ -2,7 +2,7 @@
 
 The intended pitch for the Databricks Student Fellows program. Three acts: the
 problem, what we built, and what the evidence shows. For "what exists today as
-infrastructure," read `docs/system-map.md`.
+infrastructure," read `docs/architecture/system-map.md`.
 
 ## Act 1 — The problem
 
@@ -66,7 +66,7 @@ MLflow runs per stage, Foundation Model embeddings, Vector Search for cluster
 retrieval (planned), Workflows for orchestration (planned), Unity Catalog
 governance (planned). It is not a deployment target bolted on at the end; it
 is the substrate the system was designed around. See
-`docs/databricks-integration.md` for the promotion path.
+`docs/databricks/integration.md` for the promotion path.
 
 ## Act 3 — What the evidence shows
 

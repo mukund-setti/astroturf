@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 1 known-answer benchmark: did the Broadband for America template land in a cluster?
 
-See docs/ecfs-setup.md for the validation methodology. This script reads
+See docs/operations/ecfs-setup.md for the validation methodology. This script reads
 gold.comment_clusters for docket 17-108, locates the largest cluster, looks
 up its representative comment in silver.parsed_comments, and checks for the
 canonical BFA template phrase. If the phrase isn't present in the largest
@@ -129,7 +129,9 @@ def main() -> int:
 
     if not args.diagnostic:
         print("Pass --diagnostic to run the ECFS targeted query and distinguish")
-        print("sampling variance from data absence (see docs/ecfs-setup.md).")
+        print(
+            "sampling variance from data absence (see docs/operations/ecfs-setup.md)."
+        )
         return 2
 
     # Diagnostic: query ECFS directly for the phrase

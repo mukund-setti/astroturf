@@ -3,8 +3,8 @@
 Actionable checklist of every artifact to capture for the Databricks Student
 Fellows application. Each item has a status checkbox and a note for what to
 capture and where to put it. Adapted from the Evidence checklist section of
-`docs/databricks-integration.md` (the canonical Databricks promotion plan)
-and the demo narrative in `docs/demo-story.md`.
+`docs/databricks/integration.md` (the canonical Databricks promotion plan)
+and the demo narrative in `docs/methodology/demo-story.md`.
 
 Conventions:
 
@@ -116,12 +116,13 @@ Conventions:
 
 - [ ] **Repository link** — public GitHub URL of the Astroturf repo.
 - [ ] **README** — README at the repo root introduces the project, points
-  to `docs/system-map.md`, `docs/demo-story.md`,
-  `docs/databricks-integration.md`, and this checklist.
-- [ ] **Architecture docs** — `docs/architecture.md`, `docs/system-map.md`,
-  `docs/demo-story.md`, `docs/databricks-integration.md`,
-  `docs/databricks-vector-search.md`, `docs/attachment-extraction-plan.md`,
-  `docs/test-dockets.md` all present and current.
+  to `docs/architecture/system-map.md`, `docs/methodology/demo-story.md`,
+  `docs/databricks/integration.md`, and this checklist.
+- [ ] **Architecture docs** — `docs/architecture/architecture.md`,
+  `docs/architecture/system-map.md`, `docs/methodology/demo-story.md`,
+  `docs/databricks/integration.md`, `docs/databricks/vector-search.md`,
+  `docs/operations/attachment-extraction-plan.md`,
+  `docs/operations/test-dockets.md` all present and current.
 - [ ] **ADRs present** — `docs/decisions/` contains:
   - ADR-0001 multi-agent durable stages
   - ADR-0002 deltalake for local bronze
@@ -152,21 +153,21 @@ Conventions:
 
 ## Narrative artifacts
 
-- [ ] **60-second demo script** — present in `docs/demo-story.md` Act 1,
+- [ ] **60-second demo script** — present in `docs/methodology/demo-story.md` Act 1,
   rehearsed.
-- [ ] **Reviewer pitch paragraph** — present in `docs/demo-story.md`,
+- [ ] **Reviewer pitch paragraph** — present in `docs/methodology/demo-story.md`,
   copy-paste-ready for the application form.
-- [ ] **Cut list and stretch goals** — present in `docs/demo-story.md`, so
+- [ ] **Cut list and stretch goals** — present in `docs/methodology/demo-story.md`, so
   the submission is honest about what is in v1 vs. what is aspirational.
 
 ## Final submission package
 
 - [ ] **Application form filled** — Student Fellows form completed with
-  the reviewer pitch paragraph from `docs/demo-story.md`.
+  the reviewer pitch paragraph from `docs/methodology/demo-story.md`.
 - [ ] **Screenshots bundled** — all `docs/assets/evidence/*.png` referenced
   from the application or attached.
 - [ ] **Repo link verified** — public, clean main branch, README front and
   centre.
-- [ ] **Sanity pass** — re-read `docs/system-map.md` and
-  `docs/demo-story.md` end-to-end to make sure no claim contradicts what
+- [ ] **Sanity pass** — re-read `docs/architecture/system-map.md` and
+  `docs/methodology/demo-story.md` end-to-end to make sure no claim contradicts what
   the screenshots actually show.

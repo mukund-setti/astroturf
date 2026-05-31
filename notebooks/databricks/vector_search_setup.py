@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Vector Search v1 setup (reviewer-only)
 # MAGIC
-# MAGIC Companion notebook for [`docs/databricks-vector-search.md`](../../docs/databricks-vector-search.md).
+# MAGIC Companion notebook for [`docs/databricks/vector-search.md`](../../docs/databricks/vector-search.md).
 # MAGIC
 # MAGIC This notebook executes the 8-step runbook end-to-end on a Databricks
 # MAGIC cluster. It is **not** meant to run locally. It does not modify any code
@@ -10,7 +10,7 @@
 # MAGIC `ClusteringAgent` — that is Phase 2 (see ADR-0007).
 # MAGIC
 # MAGIC Strategy source for table names and filter values:
-# MAGIC [`docs/databricks-integration.md`](../../docs/databricks-integration.md)
+# MAGIC [`docs/databricks/integration.md`](../../docs/databricks/integration.md)
 # MAGIC (section: **Vector Search mapping**).
 # MAGIC
 # MAGIC Steps:
@@ -29,7 +29,7 @@
 # MAGIC %md
 # MAGIC ## Constants
 # MAGIC
-# MAGIC All names match `databricks-integration.md` verbatim. Do not rename
+# MAGIC All names match `docs/databricks/integration.md` verbatim. Do not rename
 # MAGIC without updating the runbook and ADR-0007.
 
 # COMMAND ----------
@@ -57,7 +57,7 @@ EMBEDDING_COLUMN = "embedding_vector"
 # MAGIC
 # MAGIC Verify the catalog/schema/table layout exists. If any of these fail,
 # MAGIC stop and fix the upstream promotion (see
-# MAGIC `databricks-integration.md` → Unity Catalog layout) before continuing.
+# MAGIC `docs/databricks/integration.md` -> Unity Catalog layout) before continuing.
 
 # COMMAND ----------
 
@@ -406,7 +406,7 @@ display(_previewed)
 # MAGIC   duration in seconds (printed in Step 6).
 # MAGIC
 # MAGIC Add these to the evidence set described in
-# MAGIC [`docs/databricks-integration.md` → Evidence checklist](../../docs/databricks-integration.md).
+# MAGIC [`docs/databricks/integration.md` -> Evidence checklist](../../docs/databricks/integration.md).
 
 # COMMAND ----------
 

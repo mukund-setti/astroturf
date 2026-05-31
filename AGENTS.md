@@ -1,99 +1,52 @@
-# Astroturf — Codex instructions
+# Astroturf Agent Instructions
 
-## What this project is
-A multi-agent system that detects coordinated public comment campaigns in federal rulemaking and traces their language into final rules. Built on Databricks. The "agentic" parts are AttributionAgent (tool-using research), ParserAgent (LLM-based PDF extraction with judgment), and the Orchestrator (routing decisions). The rest are Spark transforms wearing an agent costume — keep that distinction honest.
+## Project Summary
 
-## Architecture (authoritative: docs/architecture.md)
-Six agents over a medallion lakehouse:
-- IngestionAgent: regulations.gov v4 API -> bronze.raw_comments
-- ParserAgent: bronze -> silver.parsed_comments (LLM for PDF/scanned attachments)
-- EmbeddingAgent: silver -> silver.comment_embeddings (Databricks Foundation Model API: databricks-bge-large-en)
-- ClusteringAgent: vectors -> gold.comment_clusters (MinHash/LSH candidate generation, cosine confirmation)
-- AttributionAgent: clusters -> gold.campaign_attributions (tool-using LLM agent: web search + advocacy registry lookup)
-- MigrationAgent: clusters x final rule text -> gold.rule_migrations (phrase-level similarity, section-level citations)
+Astroturf is a multi-agent regulatory intelligence platform for detecting coordinated public comment campaigns in federal rulemaking and producing caveated evidence packets for human review. It is built around replayable agents over a Delta medallion lakehouse and a Next.js reviewer UI.
 
-Agents communicate via Delta tables, not in-memory message passing. Each agent is idempotent on its primary key and independently replayable.
+## Architecture
 
-## Non-negotiable design rules
-1. Idempotency: every agent must be safe to re-run. Writes go through Delta MERGE on a stable primary key, never blind appends.
-2. No silent failures: agents raise on unrecoverable errors. Recoverable errors (rate limits, transient HTTP) get exponential backoff via tenacity, then raise.
-3. Schemas live in shared/schemas/ as Pydantic models AND PySpark StructTypes. Source of truth is the Pydantic model; the StructType is derived from it.
-4. All LLM calls go through shared/llm_client.py so we can swap providers and add MLflow tracing in one place.
-5. Every agent run emits an MLflow run with inputs (docket_id, config), outputs (row counts, quality metrics), and timing.
-6. The Orchestrator never embeds business logic. It sequences agents and handles failures. If you're tempted to put logic in the orchestrator, it belongs in an agent.
+Authoritative overview: `docs/architecture/architecture.md`.
 
-## Architecture decisions
-Captured in docs/decisions/NNNN-kebab-title.md, numbered sequentially. Each ADR covers one decision with Context / Decision / Consequences / Alternatives. Write a new one whenever we make a non-obvious or non-trivially-reversible call.
+Agents communicate through Delta tables:
 
-## Codebase conventions
-- Python 3.11, type hints required on all public functions
-- Ruff for linting/formatting (config in pyproject.toml)
-- Tests live in tests/ mirroring the source tree
-- Notebooks in notebooks/ are thin wrappers that import from agents/ — never define logic in a notebook
-- No print() in production code; use the module logger
+- `IngestionAgent`: public source APIs -> `bronze.raw_comments`
+- `ParserAgent`: bronze -> `silver.parsed_comments` plus optional detail/attachment side tables
+- `EmbeddingAgent`: parsed comments -> `silver.comment_embeddings`
+- `ClusteringAgent`: embeddings/text hashes -> `gold.comment_clusters` and `gold.comment_cluster_memberships`
+- `AttributionAgent`: clusters -> `gold.campaign_attributions`
+- `MigrationAgent`: clusters and final-rule text -> `gold.rule_migrations`
 
-## Things to ask me about before doing
-- Adding a new dependency (tell me what and why)
-- Changing an agent's public contract (Input/Output dataclasses)
-- Creating a new Delta table or schema
-- Touching Delta table schemas (adding/removing/renaming fields, or changing types) on existing tables. See ADR-0004.
-- Any change to the medallion table layout in docs/architecture.md
+## Non-Negotiable Design Rules
 
-## Things to just do
-- Implement methods marked `raise NotImplementedError`
-- Write tests for code you're writing
-- Refactor within an agent module
-- Improve docstrings and type hints
-- Add logging where it would help debugging
+1. Idempotency: every agent must be safe to rerun. Writes should use stable primary keys and merge/replacement semantics, not blind appends.
+2. No silent failures: unrecoverable errors should raise; recoverable API errors should retry with bounded backoff and then raise.
+3. Schemas live under `shared/schemas/`.
+4. The orchestrator sequences agents and handles failures; business logic belongs inside agents.
+5. Attribution and migration outputs are evidence packets with caveats, not accusations.
+6. Keep secrets, private workspace identifiers, generated Delta tables, logs, and local artifacts out of commits.
 
-## Session discipline
-- When asked for a plan first, stop after the plan and wait for approval. Do not start implementing.
-- Do not implement, run tests, stage files, or commit after saying you are waiting for approval. "Waiting for approval" means waiting.
-- At the end of every substantial session, update the Current status section below if the project state changed. Treat it as the single source of truth for where the project is.
+## Codebase Conventions
 
-## Current status
-- IngestionAgent complete and validated locally against delta-rs / Delta tables.
-- CFPB-2016-0025 ingested into bronze: 211,885 unique comments, 0 duplicate `comment_id`s.
-- ParserAgent v1 complete: deterministic title / body / missing parsing into `silver.parsed_comments`.
-- ParserAgent v2A complete: fetches per-comment regulations.gov detail JSON, enriches parsed comments, writes `silver.comment_details` and `silver.comment_attachments`, gated by a `max_detail_fetches` safety cap.
-- AttachmentDownloaderAgent complete for v2B phase 1: downloads attachment binaries, computes checksums, updates download metadata. PDF / DOCX text extraction, reconciliation back into `parsed_comments`, OCR, and LLM extraction are still deferred.
-- EmbeddingAgent complete for comment-level embeddings: writes `silver.comment_embeddings`, with a mock backend, a local `sentence-transformers` backend, and a Databricks Foundation Model backend implemented against the Databricks SDK and live-validated on Databricks Serverless.
-- `docs/system-map.md` and `docs/demo-story.md` drafted to make the architecture, demo scope, and project narrative legible end-to-end.
-- Local real-embedding smoke test passed on the CFPB sample: 11 substantive candidates re-embedded with `BAAI/bge-large-en-v1.5` via the local `sentence-transformers` backend; `silver.comment_embeddings` now has 11 real local vectors and no remaining mock vectors for that sample.
-- ClusteringAgent v1 complete for local single-docket / single-model runs: pairwise cosine over non-mock embeddings by default, connected components above threshold, scoped replacement into `gold.comment_clusters` and `gold.comment_cluster_memberships`, MLflow metrics, and ADR-0006 covering cluster identity / gold layout.
-- CFPB real-embedding clustering smoke test passed at threshold 0.92: 11 candidates, 55 pairs, 1 edge, 1 cluster, 2 memberships.
-- Exact normalized-text-hash baseline complete: writes literal duplicate clusters into existing gold tables with `clustering_version="v1_exact_hash"`, `embedding_model="normalized_text_hash"`, and `embedding_backend="exact_hash"`.
-- EPA-HQ-OAR-2021-0317 exact-hash baseline smoke test passed: 396 candidate `detail_comment_text` rows, 7 duplicate-hash clusters, 16 memberships, largest cluster size 4.
-- Debug UI expanded to include exact-hash baseline, cluster campaign style classification, and comprehensive cluster evidence inspection.
-- Evidence export CLI added: `scripts/export_cluster_evidence.py` writes bounded Markdown cluster-review reports from existing gold/silver Delta tables; EPA-HQ-OAR-2021-0317 report generated under `data/exports/`.
-- Databricks demo workflow scaffolding added: `notebooks/databricks/workflow_tasks.py` plus `docs/databricks-workflow.md` cover `load_sample_tables -> embed -> cluster -> export_dashboard_data` for the CFPB/EPA demo.
-- Databricks Vector Search v1 reviewer-only setup added: `notebooks/databricks/vector_search_setup.py` plus `docs/databricks-vector-search.md` create the BGE-large filtered source and manual-sync index runbook, without wiring Vector Search into `ClusteringAgent`.
-- **Live Databricks Workflow Execution SUCCESS**: Run ID `864884109927694` successfully executed the full four-task multi-task pipeline (`load_sample_tables` -> `embed` -> `cluster` -> `export_dashboard_data`) for the EPA docket `EPA-HQ-OAR-2021-0317` on Serverless compute. Final Unity Catalog row counts verified: bronze/silver comments (1,000), BGE embeddings (396), gold clusters (13), gold memberships (162), review export (162).
-- **Live Databricks Vector Search Setup SUCCESS**: Run ID `162858305180109` created the BGE-filtered table and synced it to `workspace.silver.comment_embeddings_bge_large_index` on `astroturf-vs-endpoint`. Directly verified index state as `ONLINE_NO_PENDING_UPDATE` with exactly 396 rows synced in ~61 seconds, and live nearest-neighbor queries returning high-fidelity matches.
-- Full cell-by-cell execution outputs and HTML run views saved locally in `data/exports/` for verification.
-- **Phase 1 FCC ECFS Ingestion & Bronze Schema Unification SUCCESS**: Unified bronze comments schema across regulations.gov and FCC ECFS data sources. Backfilled legacy local Delta table and Databricks schemas successfully. Ingested 5K comments from FCC docket `17-108`, parsed, and ran exact-hash duplicate clustering. Verified using direct diagnostic query against the ECFS API that Broadband for America (BFA) campaign comments are successfully present under 17-108, validating the ingestion client and parsing integration end-to-end.
-- **Phase 2 FCC ECFS 100K+ Scale Benchmark SUCCESS**: Completed a reproducible temporal-stratified ECFS scale benchmark runner. Evaluated exact duplicate hashing vs. capped semantic connected-components clustering under Net Neutrality proceeding 17-108. Successfully modeled the local $O(N^2)$ memory wall (~37.25 GB matrix for 100K comments) as a theoretical failure demonstration. Generated detailed Comparative Benchmark Reports and logged metrics directly to MLflow.
-- Latest test status: 140 tests passing, Ruff clean, Ruff format clean. Verified locally with `.uv-test-venv\Scripts\python.exe`.
-- **Phase 4 UI Multi-Topic Information Architecture Redesign SUCCESS**: Evolved the public Next.js UI from a single-docket Net Neutrality showcase into a comprehensive multi-topic, multi-agency regulatory intelligence platform. Added routes for `/topics`, `/topics/[id]`, `/agencies`, `/agencies/[id]`, and `/dockets/[id]`, and wired campaigns back to parents via hierarchical breadcrumbs. Implemented a global multi-entity autocomplete search in the masthead. Deployed honest "baseline-only / partially processed" labeling for the EPA Methane docket. All Next.js TypeScript build optimizations and the 140 backend pytests completed with 100% passes.
-- **Phase 5 Databricks production path hardening complete and Phase 6 live validation SUCCESS**: A 500-comment controlled FCC `17-108` slice was uploaded to `workspace` UC volumes, loaded into `workspace.bronze.raw_comments` / `workspace.silver.parsed_comments`, embedded live with `databricks-bge-large-en`, synced into `workspace.silver.comment_embeddings_bge_large_index` on `astroturf-vs-endpoint`, clustered with `clustering_mode="vector_search"`, and exported to `workspace.demo.cluster_review_export`. Verified row counts: raw/parsed (500), BGE embeddings (500), Vector Search source (500), gold clusters (1), gold memberships (500), review export (500). Key run IDs: load `916653215561127`, embed `546125942192140`, cluster `1028362756517371`, export `156035613634033`. One workspace-code drift issue was found and corrected by syncing local Phase 5/ECFS modules into the Databricks workspace repo before validation.
-- **Phase 7 Databricks validation documentation and UI data-mode switch complete**: Added live validation, production setup, and end-to-end runbook docs documenting the Serverless notebook/job production path, run IDs, row counts, readiness checks, and Windows local `/Volumes/...` limitation. Next.js now supports `ASTROTURF_DATA_MODE=mock|live|auto`; FCC `17-108` is no longer hardcoded to offline artifacts, fallback mode remains available, and the UI displays a visible data-source label plus a subtle reviewer diagnostics popover showing mode, resolved SQL/fallback source, docket, catalog/table, row count, and last query/error status. UI production build passes in live/auto environment and forced mock mode. After Turbopack dev crashed natively on Windows in mock mode, `npm run dev` was switched to `next dev --webpack`, `npm run dev:turbo` was retained for explicit Turbopack testing, and a mock-mode webpack dev smoke test returned HTTP 200 for `/`.
-- **Phase 8 MVP product hardening complete**: Removed placeholder-feeling primary UI surfaces. Topic/agency browsing now shows only FCC analyzed coverage, EPA baseline-only coverage, and an actionable `/analyze` docket-ingestion workflow. Future topics and supported-source agencies route to config generation instead of empty dashboards; search now returns Analyze CTAs for unsupported or unknown queries.
-- **Phase 8 influence-tracing AttributionAgent + MigrationAgent MVPs complete (offline only)**: Implemented `AttributionAgent` (`offline_seed` mode, ADR-0015) and `MigrationAgent` (`local_text` mode, ADR-0015) as evidence-packet producers, not accusation generators. Schemas `gold.campaign_attributions` and `gold.rule_migrations` follow the Pydantic+pyarrow+pyspark pattern; `confidence_score` is hard-capped strictly below 1.0; `MigrationAgent` rows require non-empty `caveat_text`; `web_research` / `llm_assisted` / `federal_register_api` modes refuse to run until follow-up ADRs configure them. Curated FCC `17-108` seed registry and a clearly-labelled final-rule excerpt fixture live under `evals/fixtures/`. The campaign-detail UI gains "Likely Campaign Origin" and "Language Migration Check" sections that fall back to "Not yet analyzed" + CLI command when data is absent. Export pipeline gains nullable attribution/migration columns; absence does not break the export. Methodology doc: `docs/attribution-and-migration-methodology.md`.
-- **`processing_status` taxonomy reconciled**: `scripts/run_docket_pipeline.py` exposes `ALLOWED_PROCESSING_STATUSES = {configured_awaiting_run, queued, partially_processed, baseline_only, analyzed}` as the single source of truth. The new `configured_awaiting_run` tier accurately describes dockets registered via `/analyze` or in `configs/dockets.yaml` that have not been run. Status-to-UI-label mapping is documented in `docs/product-vision.md` and `docs/ui-information-architecture.md`; the `/analyze` page's YAML snippet now emits the canonical status so generated config validates round-trip.
-- **Interactive `/analyze` Ingestion and Orchestration Runner**: Fully wired the Next.js frontend with local server capabilities. An endpoint `/api/analyze/register` appends new docket configurations directly to `configs/dockets.yaml` (safely checking for existing registrations first), and spawns the unified pipeline runner `scripts/run_docket_pipeline.py` in the background with local execution settings and comment limits, streaming console output to `data/logs/pipeline-<id>.log` automatically. Users can register and trigger pipeline runs directly from the browser with zero manual CLI steps.
-- **Hosted Databricks web analysis entrypoint added**: `notebooks/databricks/web_analysis_job.py` now handles production `/analyze` requests without relying on pre-uploaded `bronze.raw_imports` Parquet samples. The UI submits request parameters plus `DATABRICKS_CATALOG`, `DATABRICKS_DATA_ROOT`, `DATABRICKS_REPO_PATH`, and optional Vector Search config to the Databricks Jobs API; the notebook creates required UC schemas/volume, ingests from the public source API, parses, embeds with `databricks-bge-large-en`, clusters, and exports to `demo.cluster_review_export`. The old sample-loader workflow remains for demos and now fails clearly if invoked with a hosted `request_id`.
-- **H1: Spark-native Delta writes on Databricks (ADR-0017, 2026-05-25)**: Eliminated the delta-rs `/Volumes/` FUSE bypass — the writer that did `copytree -> mutate -> rmtree -> copytree` on every MERGE, which was the source of the ~220 rows/min ECFS ingestion floor and the 15-empty-MERGEs-in-4-seconds pattern surfaced by `scripts/diagnose_delta_paths.py`. New `shared/delta_utils/backend.py` dispatcher routes each writer to either `delta_rs` (local Windows) or `spark` (Databricks notebook) based on `ASTROTURF_DELTA_BACKEND` ∈ `{auto, spark, delta_rs}` and a path heuristic (`/Volumes/...`, `/dbfs/...`, `dbfs:/...`). All 8 prior `local_tmp_delta_path` call sites across `bronze.py`, `silver.py`, `gold.py`, `attribution.py`, `migration.py`, `discovery.py` were converted; `shared/delta_utils/fuse_bypass.py` was deleted. Spark writers in `shared/delta_utils/spark_writers.py` write to the same FUSE paths the delta-rs branch wrote to (no data migration — the diagnosis confirmed all underlying Delta logs are contiguous and clean), set `spark.databricks.delta.schema.autoMerge.enabled=true` per merge for ADR-0004-compatible additive evolution, short-circuit empty-source MERGEs, and handle brand-new-path init via overwrite. The medallion-layer Unity Catalog entries are **views** over `delta.``<path>``` (not managed tables), so the view layer keeps resolving the same paths transparently. The notebook's `_register_delta_view` learned a new `_register_delta_view_if_exists` sibling, and `silver.comment_details` / `silver.comment_attachments` are now conditionally registered after the parser stage so H2 lands cleanly. New diagnostic tool `scripts/diagnose_delta_paths.py` (`--catalog`, `--include-history-versions`) classifies every UC entry as view-vs-table and dumps history for every underlying path-based Delta table. Tests: 14 new dispatcher + brand-new-path tests in `tests/unit/test_delta_backend.py` and `tests/unit/test_delta_writers_brand_new_path.py` plus a 5-test opt-in Spark suite at `tests/integration/test_spark_writers.py` gated by `ASTROTURF_RUN_SPARK_TESTS=1` (Windows hits the ADR-0002 HADOOP_HOME wall). UI comments referencing `fuse_bypass.py` were updated to point at ADR-0017. **Pending H1 acceptance gate**: re-run FCC 17-108 5K ECFS slice on Databricks and confirm under-8-min wall clock (was ~22 min under the FUSE bypass).
+- Python 3.11.
+- Type hints on public functions.
+- Ruff for linting and formatting.
+- Tests live under `tests/`.
+- Notebooks in `notebooks/` should be thin wrappers around importable modules.
+- Production code should use module loggers rather than `print()`.
 
-- **Honest pipeline observability + validated discovery catalog (2026-05-25)**: Workspace `web_analysis_job.py` now raises on zero-row stages so silent-SUCCESS runs (FTC dry-run, 23-562 synthetic-empty) are impossible. `ui/lib/databricks-jobs.ts` hard-pins `dry_run=false`. New `ui/lib/runtime-estimate.ts` shows honest per-stage ETAs on `/analyze` and `/discoveries`. New `ui/components/analysis-progress.tsx` + `/api/analysis/[id]/progress` auto-poll every 10s with live per-stage Delta row counts; the manual `Sync Databricks Run` button is now a fallback only. `ui/db/migrations/003_add_docket_validation.sql` + `seeds/003_seed_validated_dockets.sql` + `scripts/validate_discoveries.py` add validation tracking; synthetic seed dockets (FTC-2024-0012, FDA-2023-N-1200, 23-562, 14-28-as-robocall) deleted, leaving only 4 source-API-confirmed dockets in the catalog. Hard scale caps removed; users see ETA and opt in eyes-open. Two real T2a runs in flight: FCC 17-108 ECFS 5K (`737755812472908`) and CFPB-2016-0025 regs.gov 1K (`724798107790115`).
-- **Vercel UI deployment hardening (2026-05-31)**: Fixed the Next 16 production build root config for the `ui` monorepo import by aligning `outputFileTracingRoot` and `turbopack.root` to the repo root, removed build-time Google Fonts fetching from `next/font/google`, and replaced the remaining internal `<a>` navigation in `/discoveries` with `next/link`.
-- Latest test status: **203 backend tests passing** (5 skipped — opt-in Spark integration suite), Ruff clean, Ruff format clean. Verified locally with `.uv-test-venv\Scripts\python.exe`. UI: `npx tsc --noEmit` clean, `npx eslint` clean, `npm run build` passes as of 2026-05-31.
+## Public Configuration
 
-### Next priorities
-1. **H1 acceptance gate (immediate next step)**: redeploy `notebooks/databricks/web_analysis_job.py` + the new `shared/delta_utils/*` modules to the Databricks workspace and re-run the FCC 17-108 5K ECFS slice. Acceptance is under 8 minutes wall-clock (was ~22 min under the FUSE bypass) and a clean per-stage row-count progression.
-2. **H2 ParserAgent mid-loop checkpointing + bounded concurrent fetches** (next on the production-blocker queue). Mid-loop MERGE every N=200 rows or 5 minutes; `ThreadPoolExecutor(max_workers=5)` shared across regs.gov detail fetches; token-bucket rate limiter at 1000/hour (the api.data.gov cap); `--force-reparse` CLI flag wired to existing `ParserInput.force_enrich`. Public dataclasses unchanged.
-3. **S5 recalibrate `ui/lib/runtime-estimate.ts`** against post-H1 numbers. Add `pipeline_observations` Postgres table (migration `004_add_pipeline_observations.sql`), have the notebook write per-stage timings directly via `psycopg2` using `DATABASE_URL`, and switch `estimateRuntime` to a rolling p50 with the existing hard-coded constants as fallback.
-4. **H4 concurrency cap + Asset Bundles** (job spec under source control), then **H3 shared-password middleware**, then **H5 docket catalog expansion**.
-5. **ADR-0017 Future work item**: collapse the 15-empty-MERGEs-per-page pattern in `agents/ingestion/agent.py` by batching ~20 pages before calling `merge_comments`. Post-H1 this is cheap waste (no FUSE round-trip) instead of crippling, but still worth doing.
-6. Run AttributionAgent + MigrationAgent against the live FCC `17-108` clustered slice end-to-end once H1's acceptance run produces fresh data.
-7. ADR + implementation for `web_research` (AttributionAgent) and `federal_register_api` (MigrationAgent) modes — gated behind tooling configuration and explicit user approval.
-8. Later: attachment text extraction (ParserAgent v2B phases 2-4) and expanded production Vector Search evaluation/recall tuning.
+Use `.env.example` and `ui/.env.example` as templates. Real values must be supplied through local env files, Databricks secrets, or deployment-platform secrets and must not be committed.
+
+Important knobs:
+
+- `ASTROTURF_DATA_MODE=mock|live|auto`
+- `ASTROTURF_DELTA_BACKEND=auto|spark|delta_rs`
+- `ASTROTURF_EXECUTION_MODE=command|local_process|databricks_job`
+
+## Current Public Status
+
+- Local tests and UI build commands are expected to work without Databricks credentials when using mock/local modes.
+- Databricks live execution requires user-provided workspace, SQL Warehouse, Jobs API, Unity Catalog, and optional Vector Search configuration.
+- Generated runtime artifacts are intentionally ignored; small public sample artifacts under `artifacts/` are retained for review context.

@@ -33,14 +33,12 @@ The successful production run used this task order:
 
 The validated cluster task used `clustering_mode="vector_search"` for the FCC `17-108` slice.
 
-## Live Run IDs
+## Live Run References
 
-| Task | Run ID |
-| --- | --- |
-| Load sample | `916653215561127` |
-| Embed | `546125942192140` |
-| Vector Search cluster | `1028362756517371` |
-| Export dashboard data | `156035613634033` |
+The validation was performed in a private Databricks workspace. Private run
+identifiers are intentionally omitted from the public repository. Reproduce the
+validation by running the task order above in your own workspace and inspecting
+the resulting Databricks job and MLflow run pages.
 
 ## Final Row Counts
 

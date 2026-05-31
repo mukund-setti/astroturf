@@ -3,7 +3,7 @@
 This document explains how the AttributionAgent and MigrationAgent work, what
 they claim, what they explicitly do not claim, and how reviewers should
 interpret their output. The companion architectural decision is
-[ADR-0015](decisions/0015-attribution-and-migration-agents.md).
+[ADR-0015](../decisions/0015-attribution-and-migration-agents.md).
 
 > Outputs from both agents are **evidence packets**, not accusations. They are
 > a starting point for manual review, not a conclusion.

@@ -19,7 +19,7 @@ Databricks and locally without branching.
 
 CLAUDE.md requires an ADR for every new Delta table or schema. This is the
 first table in the `astroturf.demo` schema described by
-`docs/databricks-integration.md`.
+`docs/databricks/integration.md`.
 
 ## Decision
 

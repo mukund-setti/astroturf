@@ -26,8 +26,8 @@ log = logging.getLogger("run_docket_pipeline")
 VALID_STAGES = ("ingest", "parse", "embed", "cluster", "export")
 
 # Allowed processing_status values for configs/dockets.yaml. Documented in
-# docs/product-vision.md (UI coverage tiers map onto these in
-# docs/ui-information-architecture.md).
+# docs/product/product-vision.md (UI coverage tiers map onto these in
+# docs/product/ui-information-architecture.md).
 #
 # - configured_awaiting_run: registered in config (or via /analyze) but no
 #   pipeline run has occurred yet. UI label: "Configured, awaiting run".

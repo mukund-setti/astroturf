@@ -50,7 +50,7 @@ def test_looks_like_databricks_path_examples() -> None:
     assert backend_mod.looks_like_databricks_path("dbfs:/tmp/x")
     assert not backend_mod.looks_like_databricks_path("./data/bronze/raw_comments")
     assert not backend_mod.looks_like_databricks_path(
-        r"C:\Users\mukun\astroturf\data\bronze\raw_comments"
+        r"C:\example\astroturf\data\bronze\raw_comments"
     )
     # Path objects work too — Path stringification is consistent.
     assert backend_mod.looks_like_databricks_path(

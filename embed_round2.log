@@ -1,10 +1,0 @@
-Starting EmbeddingAgent for docket: 17-108
-Parsed path:     ./data/silver/parsed_comments
-Embeddings path: ./data/silver/comment_embeddings
-Model:           BAAI/bge-large-en-v1.5
-Backend:         local
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-2026-05-23 21:36:29,830 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights:  41%|####1     | 161/391 [00:00<00:00, 1605.27it/s]Loading weights:  94%|#########4| 368/391 [00:00<00:00, 1842.63it/s]Loading weights: 100%|##########| 391/391 [00:00<00:00, 1837.40it/s]
-C:\Users\mukun\astroturf\agents\embedding\agent.py:116: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
-  self._dimension = int(self._model.get_sentence_embedding_dimension())

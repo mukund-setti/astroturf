@@ -1,7 +1,7 @@
 # Databricks Vector Search runbook
 
 This is the operator runbook for the Astroturf Vector Search production
-clustering path. Strategy lives in `docs/databricks-integration.md`; this file
+clustering path. Strategy lives in `docs/databricks/integration.md`; this file
 is the concrete setup and operating surface.
 
 ## What This Produces

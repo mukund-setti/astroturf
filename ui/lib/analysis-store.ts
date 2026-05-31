@@ -1,4 +1,4 @@
-import { query as pgQuery, isConnectionError } from "./db";
+import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
 
 export interface AnalysisRequest {
   request_id: string;
@@ -40,7 +40,7 @@ export async function listAnalysisRequests(): Promise<AnalysisRequest[]> {
     );
     return rows.map(mapRowToRequest);
   } catch (err) {
-    console.error("Failed to list analysis requests from PostgreSQL:", err);
+    console.error("Failed to list analysis requests from PostgreSQL:", sanitizeDatabaseError(err));
     if (isConnectionError(err)) return [];
     throw err;
   }
@@ -58,7 +58,7 @@ export async function getAnalysisRequest(id: string): Promise<AnalysisRequest | 
     if (rows.length === 0) return null;
     return mapRowToRequest(rows[0]);
   } catch (err) {
-    console.error(`Failed to fetch analysis request ${id} from PostgreSQL:`, err);
+    console.error(`Failed to fetch analysis request ${id} from PostgreSQL:`, sanitizeDatabaseError(err));
     if (isConnectionError(err)) return null;
     throw err;
   }
@@ -171,7 +171,7 @@ export async function getMostRecentSucceededDocketId(): Promise<string | null> {
   } catch (err) {
     console.error(
       "Failed to query most-recently-succeeded analysis request from PostgreSQL:",
-      err
+      sanitizeDatabaseError(err),
     );
     if (isConnectionError(err)) return null;
     throw err;

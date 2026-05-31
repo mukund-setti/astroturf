@@ -1,4 +1,4 @@
-import { query as pgQuery, isConnectionError } from "./db";
+import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
 
 export interface WatchItem {
   watch_id: string;
@@ -29,7 +29,7 @@ export async function listWatchItems(): Promise<WatchItem[]> {
     );
     return rows.map(mapRowToWatchItem);
   } catch (err) {
-    console.error("Failed to query watchlist_items from PostgreSQL:", err);
+    console.error("Failed to query watchlist_items from PostgreSQL:", sanitizeDatabaseError(err));
     if (isConnectionError(err)) return [];
     throw err;
   }

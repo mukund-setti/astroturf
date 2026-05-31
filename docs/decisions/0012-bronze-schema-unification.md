@@ -187,7 +187,7 @@ Rejected. Splitting the bronze layer forces every downstream agent
 MigrationAgent) to do a `UNION ALL` across two tables for the common case
 where source doesn't matter — which is the case for embeddings, clustering,
 and most attribution work. The medallion architecture in
-`docs/architecture.md` treats bronze as a single physical surface; a per-source
+`docs/architecture/architecture.md` treats bronze as a single physical surface; a per-source
 split would cascade into per-source splits at every later layer or force a
 silver-level union we'd rather not have. Per-source tables also doubles the
 schema-migration surface for additive changes that apply to both

@@ -25,11 +25,11 @@ Astroturf works with any database-as-a-service provider that supports standard P
 ### Provisioning the Database
 1. Provision a PostgreSQL instance (v14+ recommended) and retrieve the connection URL:
    ```env
-   postgresql://username:password@hostname.provider.com:5432/database_name?sslmode=require
+   <postgres-connection-url-with-ssl>
    ```
 
 2. Run the initial schema migration script located at:
-   [001_initial_control_plane.sql](file:///c:/Users/mukun/astroturf/ui/db/migrations/001_initial_control_plane.sql)
+   [`ui/db/migrations/001_initial_control_plane.sql`](../../ui/db/migrations/001_initial_control_plane.sql)
    
    You can apply this SQL file directly via your hosted provider's SQL editor console or by running `psql` locally:
    ```bash
@@ -120,7 +120,7 @@ Set the following environment variables in your hosting provider's dashboard (e.
 ### Databricks Pipeline Settings
 | Variable | Value / Description | Required? |
 | :--- | :--- | :---: |
-| `DATABRICKS_HOST` | Workspace URL (e.g. `https://dbc-xxxxxx.cloud.databricks.com`) | **Yes** |
+| `DATABRICKS_HOST` | Workspace URL (e.g. `https://<databricks-workspace-host>`) | **Yes** |
 | `DATABRICKS_TOKEN` | Personal Access Token (PAT) with run permissions | **Yes** |
 | `DATABRICKS_JOB_ID` | Job ID whose task runs `notebooks/databricks/web_analysis_job.py` | **Yes** |
 | `DATABRICKS_CATALOG` | Unity Catalog target for hosted request outputs, e.g. `astroturf` | **Yes** |
@@ -206,7 +206,7 @@ Follow these steps to deploy a fresh instance of the Astroturf control plane:
 
 ### Step 2: Seed the Schema
 - Open the SQL Query editor on your database provider dashboard.
-- Copy/paste the entire contents of [001_initial_control_plane.sql](file:///c:/Users/mukun/astroturf/ui/db/migrations/001_initial_control_plane.sql) and execute it.
+- Copy/paste the entire contents of [`001_initial_control_plane.sql`](../../ui/db/migrations/001_initial_control_plane.sql) and execute it.
 - Verify that the tables are present in the default schema.
 
 ### Step 3: Configure environment variables on host

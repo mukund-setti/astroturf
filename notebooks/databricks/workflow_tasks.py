@@ -16,8 +16,8 @@
 # MAGIC 4. `export_dashboard_data` - join clusters, memberships, parsed comments,
 # MAGIC    and raw comment metadata into `astroturf.demo.cluster_review_export`.
 # MAGIC
-# MAGIC Runbook: `docs/databricks-workflow.md`.
-# MAGIC Vector Search wiring (referenced by `embed`): `docs/databricks-vector-search.md`.
+# MAGIC Runbook: `docs/databricks/workflow.md`.
+# MAGIC Vector Search wiring (referenced by `embed`): `docs/databricks/vector-search.md`.
 
 # COMMAND ----------
 # MAGIC %md
@@ -254,7 +254,7 @@ if task in ("all", "load_sample_tables"):
 # MAGIC
 # MAGIC Vector Search index sync (model-filtered slice
 # MAGIC `astroturf.silver.comment_embeddings_bge_large_index`) is **out of scope**
-# MAGIC for this cell. See `docs/databricks-vector-search.md` for the index setup
+# MAGIC for this cell. See `docs/databricks/vector-search.md` for the index setup
 # MAGIC owned by Agent 1.
 
 # COMMAND ----------

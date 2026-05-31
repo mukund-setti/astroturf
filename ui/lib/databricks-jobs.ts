@@ -108,10 +108,10 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
         throw new Error("Databricks authorization failed: Invalid or expired DATABRICKS_TOKEN.");
       }
       if (res.status === 404) {
-        throw new Error(`Databricks Job with ID ${jobId} was not found on host ${host}.`);
+        throw new Error("Configured Databricks Job was not found on the configured workspace.");
       }
       const errText = await res.text();
-      throw new Error(`Databricks API returned HTTP ${res.status}: ${errText}`);
+      throw new Error(`Databricks API returned HTTP ${res.status}: ${sanitizeDiagnosticMessage(errText)}`);
     }
 
     const data = await res.json();
@@ -121,7 +121,7 @@ export async function submitDocketJob(request: AnalysisRequest): Promise<{ run_i
 
     return { run_id: String(data.run_id) };
   } catch (err) {
-    console.error("Databricks job submission failed:", err);
+    console.error("Databricks job submission failed:", sanitizeDiagnosticMessage(err));
     throw err;
   }
 }
@@ -156,13 +156,13 @@ export async function getRunStatus(runId: string): Promise<DatabricksRunResponse
         throw new Error(`Databricks Run with ID ${runId} was not found.`);
       }
       const errText = await res.text();
-      throw new Error(`Databricks API returned HTTP ${res.status}: ${errText}`);
+      throw new Error(`Databricks API returned HTTP ${res.status}: ${sanitizeDiagnosticMessage(errText)}`);
     }
 
     const data = await res.json();
     return data as DatabricksRunResponse;
   } catch (err) {
-    console.error(`Failed to fetch Databricks run status for runId ${runId}:`, err);
+    console.error("Failed to fetch Databricks run status:", sanitizeDiagnosticMessage(err));
     throw err;
   }
 }
@@ -212,7 +212,17 @@ export async function getNotebookExitMessage(parentRunId: string): Promise<strin
     const result = outData.notebook_output?.result;
     return typeof result === "string" && result.trim().length > 0 ? result : null;
   } catch (err) {
-    console.warn(`Failed to fetch notebook exit message for parent run ${parentRunId}:`, err);
+    console.warn("Failed to fetch notebook exit message:", sanitizeDiagnosticMessage(err));
     return null;
   }
+}
+
+function sanitizeDiagnosticMessage(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return message
+    .replace(/https?:\/\/[A-Za-z0-9.-]+\.cloud\.databricks\.com/gi, "https://<databricks-workspace-host>")
+    .replace(/\/sql\/1\.0\/warehouses\/[A-Za-z0-9-]+/gi, "/sql/1.0/warehouses/<warehouse-id>")
+    .replace(/dapi[A-Za-z0-9]+/gi, "<databricks-token>")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer <redacted>")
+    .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "<postgres-connection-url>");
 }

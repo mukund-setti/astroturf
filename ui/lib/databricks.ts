@@ -334,7 +334,10 @@ export async function getDetailedStageCounts(
           counts[key] = toInt(rows[0]?.n);
         }
       } catch (err) {
-        console.warn(`getDetailedStageCounts: ${key} read failed (likely mid-FUSE-sync):`, err);
+        console.warn(
+          `getDetailedStageCounts: ${key} read failed (likely mid-FUSE-sync):`,
+          sanitizeDiagnosticMessage(err),
+        );
       }
     }),
   );
@@ -398,7 +401,7 @@ export async function query<T = Record<string, unknown>>(
       await client.close();
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = sanitizeDiagnosticMessage(err);
     if (mode === "live") {
       lastResolvedDataSource = "live";
       const formatted = formatLiveDatabricksError(message);
@@ -442,11 +445,12 @@ function inferPrimaryTable(sql: string): string {
 }
 
 function formatLiveDatabricksError(message: string): string {
+  const safeMessage = redactPrivateIdentifiers(message);
   if (message.includes("401")) {
     return [
       "Databricks SQL authentication failed with HTTP 401.",
       "Check DATABRICKS_TOKEN, confirm the token is not expired or revoked, and verify the principal has access to the SQL Warehouse in DATABRICKS_HTTP_PATH.",
-      `Driver message: ${message}`,
+      `Driver message: ${safeMessage}`,
     ].join(" ");
   }
 
@@ -454,11 +458,27 @@ function formatLiveDatabricksError(message: string): string {
     return [
       "Databricks SQL authorization failed with HTTP 403.",
       "The token is valid, but the principal likely lacks permission on the SQL Warehouse, catalog, schema, or table.",
-      `Driver message: ${message}`,
+      `Driver message: ${safeMessage}`,
     ].join(" ");
   }
 
-  return `Databricks SQL query failed in live mode. Driver message: ${message}`;
+  return `Databricks SQL query failed in live mode. Driver message: ${safeMessage}`;
+}
+
+function sanitizeDiagnosticMessage(value: unknown): string {
+  if (value instanceof Error) {
+    return redactPrivateIdentifiers(value.message);
+  }
+  return redactPrivateIdentifiers(String(value));
+}
+
+function redactPrivateIdentifiers(message: string): string {
+  return message
+    .replace(/https?:\/\/[A-Za-z0-9.-]+\.cloud\.databricks\.com/gi, "https://<databricks-workspace-host>")
+    .replace(/\/sql\/1\.0\/warehouses\/[A-Za-z0-9-]+/gi, "/sql/1.0/warehouses/<warehouse-id>")
+    .replace(/dapi[A-Za-z0-9]+/gi, "<databricks-token>")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer <redacted>")
+    .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "<postgres-connection-url>");
 }
 
 /**

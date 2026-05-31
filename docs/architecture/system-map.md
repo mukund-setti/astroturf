@@ -1,8 +1,9 @@
 # System map
 
 A plain-English snapshot of the Astroturf project: where it stands today, how the
-pieces fit together, and what is still ahead. Pair this with `docs/architecture.md`
-(authoritative spec), the ADRs in `docs/decisions/`, and `docs/demo-story.md`
+pieces fit together, and what is still ahead. Pair this with
+`docs/architecture/architecture.md` (authoritative spec), the ADRs in
+`docs/decisions/`, and `docs/methodology/demo-story.md`
 (intended final demo).
 
 ## What this project is
@@ -167,7 +168,7 @@ on a real docket; "partial" means implemented but with deferred sub-phases.
     extraction, and reconciliation back into `parsed_comments` are not built
     yet. Most CFPB content lives in attachments, so this is the
     highest-leverage future work for substantive coverage. (See
-    `docs/attachment-extraction-plan.md` and ADR-0008.)
+    `docs/operations/attachment-extraction-plan.md` and ADR-0008.)
 - **Module:** `agents/parser/agent.py`, CLI at `scripts/run_parser.py`.
 
 ### AttachmentDownloaderAgent — v2B phase 1 done
@@ -345,10 +346,10 @@ review for these clusters lives at
 
 - **Unity Catalog** governance and table identities
   (`astroturf.bronze.raw_comments` etc. as Unity Catalog three-part names
-  rather than file paths). See `docs/databricks-integration.md`.
+  rather than file paths). See `docs/databricks/integration.md`.
 - **Databricks Vector Search** index sync over `silver.comment_embeddings`,
   filtered by `embedding_model` to satisfy the fixed-dimension index
-  requirement (see ADR-0005 and `docs/databricks-vector-search.md`).
+  requirement (see ADR-0005 and `docs/databricks/vector-search.md`).
 - **Databricks Workflows** for production orchestration
   (`infra/workflows/main.yml` is the eventual home; the local orchestrator is
   the dev driver until then).

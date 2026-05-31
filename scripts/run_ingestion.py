@@ -112,7 +112,7 @@ def main():
     except RuntimeError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         print(
-            "Set DATA_GOV_API_KEY in your .env (see docs/ecfs-setup.md).",
+            "Set DATA_GOV_API_KEY in your .env (see docs/operations/ecfs-setup.md).",
             file=sys.stderr,
         )
         sys.exit(1)

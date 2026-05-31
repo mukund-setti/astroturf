@@ -70,9 +70,9 @@ dashboard.
 
 ### Backend processing_status values
 
-Each docket entry in [`configs/dockets.yaml`](../configs/dockets.yaml) carries
+Each docket entry in [`configs/dockets.yaml`](../../configs/dockets.yaml) carries
 a `processing_status`. The allowed values are enforced by
-[`scripts/run_docket_pipeline.py`](../scripts/run_docket_pipeline.py)
+[`scripts/run_docket_pipeline.py`](../../scripts/run_docket_pipeline.py)
 (`ALLOWED_PROCESSING_STATUSES`):
 
 | `processing_status` | UI label | Meaning |
@@ -85,7 +85,7 @@ a `processing_status`. The allowed values are enforced by
 
 The MVP coverage tiers above are UI-facing summaries that map onto these
 backend statuses; the UI's `CoverageStatus` enum is documented in
-[`docs/ui-information-architecture.md`](ui-information-architecture.md).
+[`ui-information-architecture.md`](ui-information-architecture.md).
 
 ---
 
@@ -99,5 +99,5 @@ Adding a new docket to the active analysis pipeline is fully automated via the A
 3. **Parsing**: The `ParserAgent` extracts structural details and attachment text (e.g. PDFs, DOCX) to write to `silver.parsed_comments`.
 4. **Embedding**: The `EmbeddingAgent` generates vectors using Serverless Databricks Foundation Model APIs, writing to `silver.comment_embeddings`.
 5. **Clustering**: The `ClusteringAgent` runs high-scale cosine grouping, saving resulting campaign templates to `gold.comment_clusters`.
-6. **Attribution & Migration (evidence layer)**: The `AttributionAgent` (offline seed registry) emits *candidate* campaign-origin rows to `gold.campaign_attributions`; the `MigrationAgent` emits phrase-level *language overlap* rows between clusters and final rule text into `gold.rule_migrations`. Both produce **evidence packets**, not accusations, and never claim causality — see [ADR-0015](decisions/0015-attribution-and-migration-agents.md) and [`docs/attribution-and-migration-methodology.md`](attribution-and-migration-methodology.md).
+6. **Attribution & Migration (evidence layer)**: The `AttributionAgent` (offline seed registry) emits *candidate* campaign-origin rows to `gold.campaign_attributions`; the `MigrationAgent` emits phrase-level *language overlap* rows between clusters and final rule text into `gold.rule_migrations`. Both produce **evidence packets**, not accusations, and never claim causality — see [ADR-0015](../decisions/0015-attribution-and-migration-agents.md) and [`docs/methodology/attribution-and-migration.md`](../methodology/attribution-and-migration.md).
 7. **Frontend Hydration**: The public Next.js UI automatically queries these Delta Tables through the Databricks SQL Warehouse, dynamically rendering the new dossiers. Absence of attribution/migration data renders as "Not yet analyzed" with a runnable command — never as a false negative.

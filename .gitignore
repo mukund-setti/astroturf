@@ -1,25 +1,76 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# Virtual environments and local tool caches
+.venv/
+.uv-cache/
+.uv-python/
+.uv-test-venv/
+
+# Environment and credentials
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
 .databricks/
-*.egg-info/
-dist/
-build/
+databricks.cfg
+credentials.json
+
+# Node / Next.js / Vercel
+node_modules/
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/build/
+ui/.vercel/
+ui/*.tsbuildinfo
+ui/next-env.d.ts
+
+# Local UI control-plane state
+ui/.data/
+
+# Databricks / Spark / Delta / local warehouses
+data/
 mlruns/
+mlartifacts/
+mlflow.db
 spark-warehouse/
 metastore_db/
 derby.log
-data/
-mlflow.db
+**/_delta_log/
+*.parquet
+*.snappy.parquet
+*.delta
+warehouse/
 
-# Local review scratch files (Claude conversations, etc.)
+# Generated exports, logs, and scratch files
+*.log
+logs/
+tmp/
+temp/
+.scratch/
 _review_*.txt
+_diff_*.txt
+scripts/_smoke_*.py
+scripts/_smoke_*.js
+ui/next-dev-smoke*.log
 
-# Claude Code project state
+# Notebook and OS/editor state
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
 .claude/

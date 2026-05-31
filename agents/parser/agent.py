@@ -255,9 +255,7 @@ class ParserAgent:
                     pc.field("docket_id") == inputs.docket_id
                 )
             else:
-                log.warning(
-                    "docket_id column not found in bronze Delta table schema."
-                )
+                log.warning("docket_id column not found in bronze Delta table schema.")
                 arrow_table = arrow_table.slice(0, 0)  # Empty table
 
             records = arrow_table.to_pylist()
@@ -295,8 +293,7 @@ class ParserAgent:
                                 .select("comment_id")
                             )
                             already_enriched_ids = {
-                                row["comment_id"]
-                                for row in sdf_details.collect()
+                                row["comment_id"] for row in sdf_details.collect()
                             }
                         except Exception as spark_exc:
                             # Path may not exist yet (first-ever run for

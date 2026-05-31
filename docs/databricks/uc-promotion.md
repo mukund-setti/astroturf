@@ -3,7 +3,7 @@
 This runbook is the operator path for promoting a curated sample of the local
 delta-rs lakehouse into Unity Catalog Delta tables on Databricks. It implements
 the "Minimum credible Databricks demo path" from
-[docs/databricks-integration.md](databricks-integration.md):
+[integration.md](integration.md):
 
 ```text
 local Delta tables -> Parquet snapshots -> astroturf.bronze.raw_imports volume
@@ -33,7 +33,7 @@ in `silver.parsed_comments` locally (the 250 curated CFPB comments). Everything
 downstream of bronze (silver, gold) is consistent with that bronze slice.
 
 The Parquet payload uses the Pydantic-derived Arrow schemas under
-[shared/schemas/](../shared/schemas/) so it matches the Delta table column
+[shared/schemas/](../../shared/schemas/) so it matches the Delta table column
 definitions below.
 
 ## 1. Run the export script
@@ -140,7 +140,7 @@ After uploading, the staging path for each table is:
 Run each block in the Databricks SQL Editor against the `astroturf` catalog.
 Tables are created `OR REPLACE` so the runbook is idempotent across reruns of
 the export. Column types match the Pydantic-derived schemas under
-[shared/schemas/](../shared/schemas/).
+[shared/schemas/](../../shared/schemas/).
 
 ### 4.1 `astroturf.bronze.raw_comments`
 
@@ -270,7 +270,7 @@ FILEFORMAT = PARQUET;
 ```
 
 The compound primary key is `(comment_id, embedding_model)` (see ADR-0005). The
-Vector Search index in [docs/databricks-integration.md](databricks-integration.md)
+Vector Search index in [integration.md](integration.md)
 slices this table to a single `embedding_model` before indexing.
 
 ### 4.6 `astroturf.gold.comment_clusters`
@@ -380,7 +380,7 @@ ORDER BY m.membership_rank;
 
 Capture these in order — each artifact ties back to the
 "Evidence checklist" section of
-[docs/databricks-integration.md](databricks-integration.md):
+[integration.md](integration.md):
 
 1. **Catalog overview.** Catalog Explorer showing `astroturf` with the
    `bronze`, `silver`, `gold`, and `demo` schemas expanded.

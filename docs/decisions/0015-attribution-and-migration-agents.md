@@ -157,7 +157,7 @@ Negative:
   surface attribution for a docket we have not curated.
 - `confidence_score < 1.0` is unusual in ML output and may surprise readers;
   the cap is intentional and is documented in this ADR plus
-  `docs/attribution-and-migration-methodology.md`.
+  `docs/methodology/attribution-and-migration.md`.
 
 ## Alternatives considered
 

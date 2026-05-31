@@ -46,13 +46,13 @@ def test_dockets_yaml_loads_and_validates() -> None:
     # CFPB and SEC are registered via /analyze (or directly in dockets.yaml)
     # but have not been run through the pipeline yet — see
     # ALLOWED_PROCESSING_STATUSES in scripts/run_docket_pipeline.py and the
-    # status table in docs/product-vision.md.
+    # status table in docs/product/product-vision.md.
     assert by_id["CFPB-2016-0025"].processing_status == "configured_awaiting_run"
     assert by_id["SEC-2023-0001"].processing_status == "configured_awaiting_run"
 
 
 def test_allowed_processing_statuses_documented() -> None:
-    """All five tiers documented in docs/product-vision.md must be accepted."""
+    """All five tiers documented in docs/product/product-vision.md must be accepted."""
     from scripts.run_docket_pipeline import ALLOWED_PROCESSING_STATUSES
 
     assert ALLOWED_PROCESSING_STATUSES == frozenset(

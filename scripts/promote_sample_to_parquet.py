@@ -17,7 +17,7 @@ The sample includes:
 
 Schemas are pinned to the Pydantic-derived Arrow schemas under
 ``shared/schemas/`` so the Parquet payload matches the Unity Catalog Delta
-table definitions in ``docs/databricks-integration.md``.
+table definitions in ``docs/databricks/integration.md``.
 """
 
 from __future__ import annotations

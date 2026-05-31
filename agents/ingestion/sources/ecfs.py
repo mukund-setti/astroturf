@@ -3,7 +3,7 @@
 Fetches filings from the FCC Electronic Comment Filing System public API at
 ``publicapi.fcc.gov/ecfs`` and merges them into ``bronze.raw_comments`` using
 the unified schema defined in ``shared/schemas/comments.py``. See ADR-0012 for
-the schema unification and ``docs/ecfs-setup.md`` for the observed API quirks.
+the schema unification and ``docs/operations/ecfs-setup.md`` for the observed API quirks.
 """
 
 from __future__ import annotations

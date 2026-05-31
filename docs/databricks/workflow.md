@@ -47,7 +47,7 @@ Hosted analysis job cannot use sample-loader raw_imports path. Use web_analysis_
 The rest of this runbook explains how to wire
 `notebooks/databricks/workflow_tasks.py` into the four-task
 `astroturf-cfpb-demo` Databricks Workflow described in
-[`docs/databricks-integration.md`](./databricks-integration.md) under
+[`integration.md`](./integration.md) under
 *Minimal Databricks Workflow*. It is the implementation-side companion to that
 plan and should be used only for demos, benchmarks, and controlled promotion of
 local Parquet samples.
@@ -60,13 +60,13 @@ the target block into a new file.
 
 Related docs:
 
-- [`databricks-integration.md`](./databricks-integration.md) - UC layout,
+- [`integration.md`](./integration.md) - UC layout,
   Foundation Model backend, Vector Search mapping, evidence checklist.
-- [`databricks-vector-search.md`](./databricks-vector-search.md) -
+- [`vector-search.md`](./vector-search.md) -
   model-filtered Vector Search index over
   `astroturf.silver.comment_embeddings_bge_large` (Agent 1 deliverable; file
   may not exist yet).
-- [`architecture.md`](./architecture.md) - agent contracts and table layout.
+- [`architecture.md`](../architecture/architecture.md) - agent contracts and table layout.
 
 ## Prerequisites
 
@@ -124,7 +124,7 @@ widgets.
 | Widget       | Value                                          | Notes                                                          |
 | ------------ | ---------------------------------------------- | -------------------------------------------------------------- |
 | `task`       | one of `load_sample_tables` / `embed` / `cluster` / `export_dashboard_data` | Selects which block runs. Set per task.           |
-| `catalog`    | `astroturf`                                    | UC catalog from `databricks-integration.md`.                   |
+| `catalog`    | `astroturf`                                    | UC catalog from `integration.md`.                              |
 | `docket_id`  | `CFPB-2016-0025`                               | Demo docket.                                                   |
 | `data_root`  | `/Volumes/astroturf/demo/exports/_lakehouse`   | Volume root that backs the UC external tables.                 |
 | `repo_path`  | `/Workspace/Repos/<user>/astroturf`            | Where `agents/` and `shared/` live on the cluster.             |
@@ -152,7 +152,7 @@ Reads `astroturf.silver.parsed_comments`. Writes
 `(comment_id, embedding_model)`) and registers the UC external table.
 
 Vector Search index sync (`astroturf.silver.comment_embeddings_bge_large_index`)
-is **not** triggered here - see [`databricks-vector-search.md`](./databricks-vector-search.md).
+is **not** triggered here - see [`vector-search.md`](./vector-search.md).
 
 ### `cluster`
 
@@ -240,7 +240,7 @@ Workflow task has its own minimal blast radius:
 ## Screenshot checklist
 
 For the Student Fellows evidence package (cross-referenced in
-`databricks-integration.md`), capture from a successful run:
+`integration.md`), capture from a successful run:
 
 - [ ] Workflow page showing the four-task DAG with all green.
 - [ ] Each task's run detail page showing the widget values used.
@@ -256,7 +256,7 @@ For the Student Fellows evidence package (cross-referenced in
       `astroturf.demo.cluster_review_export`.
 - [ ] Sample row of `astroturf.demo.cluster_review_export` for one cluster.
 - [ ] Vector Search index page from
-      [`databricks-vector-search.md`](./databricks-vector-search.md)
+      [`vector-search.md`](./vector-search.md)
       (separate evidence; not produced by this Workflow).
 
 ## Smoke-running the notebook ad hoc
@@ -270,9 +270,9 @@ sequence. Use `task = embed` (etc.) to run a single block while iterating.
 - It does not create the `bronze.raw_imports` volume or upload Parquet files;
   do that once before the first run.
 - It does not create the Vector Search index or trigger sync; see
-  [`databricks-vector-search.md`](./databricks-vector-search.md).
+  [`vector-search.md`](./vector-search.md).
 - It does not run AttributionAgent or MigrationAgent; both are out of scope
-  for the v1 Workflow per `databricks-integration.md`.
+  for the v1 Workflow per `integration.md`.
 - It does not modify agent code, schemas, or local CLI scripts. All four
   blocks are thin wrappers around the existing agent contracts in
   `agents/embedding/agent.py` and `agents/clustering/agent.py`.

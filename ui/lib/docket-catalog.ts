@@ -1,4 +1,4 @@
-import { query as pgQuery, isConnectionError } from "./db";
+import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
 import { query as queryDb, isOfflineMode, getCatalog } from "./databricks";
 
 export interface DiscoveredDocket {
@@ -52,7 +52,7 @@ export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
     );
     rows = pgRows.map(mapRowToDocket);
   } catch (err) {
-    console.error("Failed to query docket catalog from PostgreSQL:", err);
+    console.error("Failed to query docket catalog from PostgreSQL:", sanitizeDatabaseError(err));
     if (isConnectionError(err)) return [];
     throw err;
   }
@@ -70,7 +70,7 @@ export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
       try {
         await registerDiscoveredDocket(docket);
       } catch (seedErr) {
-        console.error(`Failed to seed docket ${docket.docket_id} into Postgres:`, seedErr);
+        console.error(`Failed to seed docket ${docket.docket_id} into Postgres:`, sanitizeDatabaseError(seedErr));
       }
     }
     return mapped;
@@ -110,7 +110,7 @@ export async function listAvailableDiscoveries(): Promise<DiscoveredDocket[]> {
     );
     return pgRows.map(mapRowToDocket);
   } catch (err) {
-    console.error("Failed to query available discoveries from PostgreSQL:", err);
+    console.error("Failed to query available discoveries from PostgreSQL:", sanitizeDatabaseError(err));
     if (isConnectionError(err)) return [];
     throw err;
   }
@@ -161,7 +161,7 @@ export async function listAnalyzedDockets(): Promise<AnalyzedDocket[]> {
       };
     });
   } catch (err) {
-    console.error("Failed to query analyzed dockets from PostgreSQL:", err);
+    console.error("Failed to query analyzed dockets from PostgreSQL:", sanitizeDatabaseError(err));
     if (isConnectionError(err)) return [];
     throw err;
   }
@@ -179,7 +179,7 @@ export async function getDiscoveredDocket(docketId: string): Promise<DiscoveredD
     if (rows.length === 0) return null;
     return mapRowToDocket(rows[0]);
   } catch (err) {
-    console.error(`Failed to get docket ${docketId} from PostgreSQL:`, err);
+    console.error(`Failed to get docket ${docketId} from PostgreSQL:`, sanitizeDatabaseError(err));
     if (isConnectionError(err)) return null;
     throw err;
   }

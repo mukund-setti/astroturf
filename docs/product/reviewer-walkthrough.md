@@ -28,7 +28,9 @@ To verify the public landing page findings, exact-hash lift comparisons, and the
 > [!NOTE]
 > **Data Mode**: Set `ASTROTURF_DATA_MODE=mock` for fully offline review, `ASTROTURF_DATA_MODE=live` to force Databricks SQL, or `ASTROTURF_DATA_MODE=auto` to try Databricks SQL and fall back to artifacts when credentials are absent. The UI shows a subtle label: `Live Databricks SQL mode`, `Offline benchmark artifact mode`, or `Auto mode: using fallback artifacts`.
 
-For the live Databricks validation details, including run IDs and final row counts, see [docs/live-databricks-validation.md](docs/live-databricks-validation.md).
+For the live Databricks validation details and final row counts, see
+[docs/databricks/live-validation.md](../databricks/live-validation.md). Private
+workspace run IDs are intentionally omitted from the public repository.
 
 ---
 
@@ -61,7 +63,7 @@ Let's drill down into the evidentiary proof:
    * **Boilerplate Repeated Phrases**: Notice that while individual comments were customized, phrases like *"That’s not the kind of Internet we want to pass on to future generations..."* appear in **35% of all comments** in this cluster.
    * **Timeline Filing Velocity**: Observe the extreme spike chart where **958 comments** were filed in a single hour bucket—a hallmark of coordinated automated submission routines.
    * **"How the Campaign Hides Itself"**: Review the stack of three sample comments side-by-side. See how different citizens added custom prefaces and personal paragraphs while maintaining the **identical core template** and **98%+ semantic similarity**, which completely broke naive exact-string hash filters.
-   * **Likely Campaign Origin & Language Migration Check**: Scroll further down the campaign page. If the AttributionAgent and MigrationAgent have run, you will see a *candidate source*, an evidence excerpt, a confidence label, and a phrase-level overlap with a final-rule fixture. If they have not yet run, the panels show "Not yet analyzed" with the exact CLI command to run. These are **evidence packets**, not accusations — see [ADR-0015](decisions/0015-attribution-and-migration-agents.md) and [`docs/attribution-and-migration-methodology.md`](attribution-and-migration-methodology.md).
+   * **Likely Campaign Origin & Language Migration Check**: Scroll further down the campaign page. If the AttributionAgent and MigrationAgent have run, you will see a *candidate source*, an evidence excerpt, a confidence label, and a phrase-level overlap with a final-rule fixture. If they have not yet run, the panels show "Not yet analyzed" with the exact CLI command to run. These are **evidence packets**, not accusations — see [ADR-0015](../decisions/0015-attribution-and-migration-agents.md) and [`docs/methodology/attribution-and-migration.md`](../methodology/attribution-and-migration.md).
 
 ---
 
@@ -88,9 +90,9 @@ To verify the internal engineering diagnostic panel:
 
 We maintain complete transparency in our research. You can inspect the mathematically formal evidence receipts generated during our runs:
 
-1. Open [artifacts/demo/example_run/demo_quality_evaluation_17-108.md](file:///c:/Users/mukun/astroturf/artifacts/demo/example_run/demo_quality_evaluation_17-108.md) in your editor.
+1. Open [`artifacts/demo/example_run/demo_quality_evaluation_17-108.md`](../../artifacts/demo/example_run/demo_quality_evaluation_17-108.md) in your editor.
 2. Review our strict definitions for **Exact Duplicate Ratio**, **Near-Duplicate Ratio**, **Cluster Purity**, and **Representative-Comment Quality**, along with their honestly documented limitations and known failure modes.
-3. Open [artifacts/benchmark/benchmark_report.md](file:///c:/Users/mukun/astroturf/artifacts/benchmark/benchmark_report.md) to inspect the raw performance runs and complexity profiling tables.
+3. Open [`artifacts/benchmark/benchmark_report.md`](../../artifacts/benchmark/benchmark_report.md) to inspect the raw performance runs and complexity profiling tables.
 
 ---
 
