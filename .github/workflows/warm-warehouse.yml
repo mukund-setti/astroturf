@@ -17,12 +17,16 @@ name: Keep Databricks warehouse warm
 #   - Comment out the `schedule:` trigger below.
 
 on:
-  schedule:
-    # Every 15 minutes. Note: GitHub may delay scheduled runs by 5-15 min
-    # during peak load, so the effective cadence is closer to 20-25 min.
-    # That's still well inside a typical auto-suspend window.
-    - cron: '*/15 * * * *'
-  # Lets you trigger a warm-up by hand from the Actions tab.
+  # Scheduled runs are intentionally disabled. Re-enable the cron when:
+  #   1. The repo has DATABRICKS_HOST / DATABRICKS_TOKEN / DATABRICKS_HTTP_PATH
+  #      set under Repo Settings → Secrets and variables → Actions, AND
+  #   2. There is a real production deployment that benefits from warming.
+  # Until both are true the cron just floods the maintainer with failure
+  # emails. The manual workflow_dispatch trigger is kept so the warm-up
+  # can still be fired by hand from the Actions tab once secrets are in.
+  #
+  # schedule:
+  #   - cron: '*/15 * * * *'
   workflow_dispatch:
 
 # We never want two warm-ups stacked up if a previous one is still running.
@@ -49,8 +53,12 @@ jobs:
           set -euo pipefail
 
           if [ -z "${DATABRICKS_HOST:-}" ] || [ -z "${DATABRICKS_TOKEN:-}" ] || [ -z "${DATABRICKS_HTTP_PATH:-}" ]; then
-            echo "::error::Missing one of DATABRICKS_HOST / DATABRICKS_TOKEN / DATABRICKS_HTTP_PATH. Add them under Repo Settings → Secrets and variables → Actions."
-            exit 1
+            # Soft-skip rather than fail. The warming is an optimization, not
+            # a correctness requirement — pages still render without it, just
+            # cold. A hard failure here floods the maintainer with email on
+            # every scheduled run when secrets aren't configured.
+            echo "::warning::Missing one of DATABRICKS_HOST / DATABRICKS_TOKEN / DATABRICKS_HTTP_PATH. Skipping warm-up. Add them under Repo Settings → Secrets and variables → Actions to enable."
+            exit 0
           fi
 
           # DATABRICKS_HTTP_PATH looks like "/sql/1.0/warehouses/abcd1234..."
