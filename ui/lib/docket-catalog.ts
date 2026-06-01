@@ -1,4 +1,4 @@
-import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
+﻿import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
 import { query as queryDb, isOfflineMode, getCatalog } from "./databricks";
 
 export interface DiscoveredDocket {
@@ -38,6 +38,49 @@ if (!databaseUrl) {
 }
 
 /**
+ * Returns dockets whose (docket_id, agency_id) routes to the given topic
+ * slug via topicForDocket. Used by the consumer surface to show "we have
+ * N analyzable dockets in this area" on topic pages that don't yet have
+ * findings. We do the routing in JS rather than SQL because topicForDocket
+ * embeds the manual override table.
+ */
+export async function listDocketsForTopic(
+  topicSlug: string,
+): Promise<DiscoveredDocket[]> {
+  const { topicForDocket, topicSlugsForQuery } = await import("./topics");
+  const childSlugs = new Set(topicSlugsForQuery(topicSlug));
+  const all = await listDiscoveredDockets();
+  return all.filter((d) =>
+    childSlugs.has(topicForDocket(d.docket_id, d.agency_id, d.tags)),
+  );
+}
+
+/**
+ * Returns the set of top-level topic slugs (per ui/lib/topics.ts) that
+ * have at least one docket in docket_catalog routing to them — directly
+ * or via any of their `gathers` children. Used together with the findings
+ * set to decide which topic chips to surface on the home page.
+ */
+export async function listTopicSlugsWithDockets(): Promise<Set<string>> {
+  const { topicForDocket, TOPICS } = await import("./topics");
+  const dockets = await listDiscoveredDockets();
+  const directSlugs = new Set(
+    dockets.map((d) => topicForDocket(d.docket_id, d.agency_id, d.tags)),
+  );
+  const result = new Set<string>();
+  for (const topic of TOPICS) {
+    if (directSlugs.has(topic.slug)) {
+      result.add(topic.slug);
+      continue;
+    }
+    if (topic.gathers?.some((child) => directSlugs.has(child))) {
+      result.add(topic.slug);
+    }
+  }
+  return result;
+}
+
+/**
  * List all discovered and monitored rulemaking dockets.
  *
  * If the Postgres cache is empty and Databricks SQL credentials are available,
@@ -59,7 +102,7 @@ export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
 
   if (rows.length > 0) return rows;
 
-  // Postgres empty — try to seed from the Databricks autopilot output.
+  // Postgres empty - try to seed from the Databricks autopilot output.
   if (isOfflineMode()) return [];
   try {
     const catalog = getCatalog();
@@ -84,7 +127,7 @@ export async function listDiscoveredDockets(): Promise<DiscoveredDocket[]> {
  * List dockets that are valid candidates for a brand-new analysis request.
  *
  * Excludes any docket that already has an analysis_request row in
- * ('submitted', 'running', 'succeeded') status — the user has either just
+ * ('submitted', 'running', 'succeeded') status - the user has either just
  * requested it or has already received results, so re-surfacing it on the
  * "candidates to analyze" page would be noise.
  *

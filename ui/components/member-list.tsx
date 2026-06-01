@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { formatDate, formatInt, truncate } from "@/lib/format";
@@ -80,7 +80,7 @@ export function MemberList({ members }: MemberListProps) {
           >
             <div className="md:col-span-2 flex flex-col gap-1 text-xs">
               <span className="text-foreground tabular-nums">
-                {formatDate(m.posted_date) ?? "—"}
+                {formatDate(m.posted_date) ?? " - "}
               </span>
               <span className="text-muted-foreground">
                 {m.submitter_name ? (

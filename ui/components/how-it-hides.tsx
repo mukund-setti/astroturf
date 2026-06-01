@@ -6,7 +6,7 @@ export function HowItHides() {
       similarity: "99.0%",
       hash: "e93f...78a1",
       preface: "I grew up with our internet and throughout my time I have had great times with our internet on a variety of sites and this new plan could take away things...",
-      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai’s plan to hand the government-subsidized ISP monopolies...",
+      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai's plan to hand the government-subsidized ISP monopolies...",
       mutation: "Substituted 'proposal' with 'plan', and 'telecom giants' with 'ISP monopolies' inside the core template text.",
     },
     {
@@ -15,7 +15,7 @@ export function HowItHides() {
       similarity: "98.4%",
       hash: "82a9...d32b",
       preface: "As a doctor and professional in the healthcare space, open internet access means that online research and medical databases load immediately for all individuals...",
-      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai’s proposal to give government-subsidized telecom...",
+      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai's proposal to give government-subsidized telecom...",
       mutation: "Injected a completely unique professional preface in the first paragraph, and replaced 'Comcast, AT&T, and Verizon' with 'telecom giants'.",
     },
     {
@@ -24,7 +24,7 @@ export function HowItHides() {
       similarity: "98.3%",
       hash: "f45c...0012",
       preface: "The internet belongs to everyone and should remain free of gatekeepers who veto expression.",
-      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai’s proposal to hand the government-subsidized...",
+      body: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. The FCC should reject Chairman Ajit Pai's proposal to hand the government-subsidized...",
       mutation: "Added a brief philosophical postscript at the tail end of the submission, leaving the inner body text unmodified.",
     },
   ];

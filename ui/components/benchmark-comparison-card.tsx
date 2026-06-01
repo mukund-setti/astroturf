@@ -1,4 +1,4 @@
-interface BenchmarkProps {
+﻿interface BenchmarkProps {
   exactCovered: number;
   exactUncovered: number;
   semanticCovered: number;
@@ -94,7 +94,7 @@ export function BenchmarkComparisonCard({
       {/* Lift Indicator */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-secondary/50 p-4 border border-rule rounded-sm">
         <div className="flex items-center gap-3">
-          <span className="text-lg">📈</span>
+          <span className="text-lg font-mono" aria-hidden="true">+%</span>
           <div>
             <p className="text-xs font-sans uppercase tracking-[0.14em] text-muted-foreground font-semibold">
               Campaign Coverage Lift

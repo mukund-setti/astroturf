@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Runtime estimator for a hosted analysis pipeline run.
  *
  * Cost model originally calibrated 2026-05-25 from the live 14-28 ECFS
  * run, when the bottleneck was the delta-rs FUSE bypass (O(table_size)
- * rmtree + copytree on every page write — see ADR-0017). After H1 swapped
+ * rmtree + copytree on every page write - see ADR-0017). After H1 swapped
  * that writer for native Spark MERGE, ingestion rates jumped from ~250
  * rows/min to (expected) several thousand rows/min, so these constants
  * are due for recalibration once we have post-H1 observations (tracked
@@ -12,7 +12,7 @@
  * regs.gov per-comment detail fetches remain gated by api.data.gov at
  * 1,000 req/hour; that's an upstream constraint unchanged by H1.
  *
- * The model is deliberately conservative — better to over-estimate the
+ * The model is deliberately conservative - better to over-estimate the
  * initial quote and let the live run's `projectFromObservation()` revise
  * it downward as data comes in than to promise a 25-min run that takes
  * 90 min. Treat returned numbers as order-of-magnitude guidance.
@@ -121,7 +121,7 @@ export function estimateRuntime(
   const warnings: string[] = [];
   if (source === "regulations_gov" && scale >= 5000) {
     warnings.push(
-      `regulations.gov parsing is rate-limited at api.data.gov (1000 req/hr). ${scale.toLocaleString()} comments → at least ${Math.ceil(scale / 1000)}h just for stage 2 detail fetches. Consider starting smaller or splitting the run.`,
+      `regulations.gov parsing is rate-limited at api.data.gov (1000 req/hr). ${scale.toLocaleString()} comments -> at least ${Math.ceil(scale / 1000)}h just for stage 2 detail fetches. Consider starting smaller or splitting the run.`,
     );
   }
   if (totalMinutes >= 120) {
@@ -146,8 +146,8 @@ export function estimateRuntime(
  * accumulates rows, `progressFraction` becomes a more reliable signal of
  * how far through the work we are than the up-front rates. We blend:
  *
- *   - The original quoted ETA (used at request time)
- *   - The naive projection: elapsed / progressFraction = total
+ *  - The original quoted ETA (used at request time)
+ *  - The naive projection: elapsed / progressFraction = total
  *
  * weighted toward the projection as we get more confident in it (i.e. as
  * progressFraction grows). Below a 5% threshold we don't trust the

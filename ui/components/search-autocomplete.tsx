@@ -150,7 +150,7 @@ export function SearchAutocomplete({
         list.push({
           type: "docket",
           id: d.id,
-          title: `Docket ${d.id} · ${d.title}`,
+          title: `Docket ${d.id} / ${d.title}`,
           subtitle: d.ruleShortName,
           badge: "Docket",
           url: `/dockets/${d.id}`,
@@ -179,7 +179,7 @@ export function SearchAutocomplete({
         list.push({
           type: "docket",
           id: d.docket_id,
-          title: `Discovered: ${d.docket_id} · ${d.title}`,
+          title: `Discovered: ${d.docket_id} / ${d.title}`,
           subtitle: ` crawler priority: ${d.priority_score} | comments estimate: ${d.comment_count_estimate}`,
           badge: "Discovered",
           url: "/discoveries",
@@ -204,7 +204,7 @@ export function SearchAutocomplete({
         if (matchInText >= 0) {
           const start = Math.max(0, matchInText - 20);
           const end = Math.min(text.length, matchInText + qTrim.length + 80);
-          snippet = (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+          snippet = (start > 0 ? "..." : "") + text.slice(start, end) + (end < text.length ? "..." : "");
           
           const relativeStart = start > 0 ? matchInText - start + 1 : matchInText;
           ranges = [{ start: relativeStart, length: qTrim.length }];

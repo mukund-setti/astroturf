@@ -72,40 +72,37 @@
 }
 
 :root {
-  /* Cooler neutral paper + confident indigo brand. The previous burnt-orange
-     on warm cream read as "Anthropic Claude default editorial," which is
-     exactly what we don't want for a Databricks-application demo. Indigo is
-     polished, civic-coded, and breaks completely from that aesthetic. */
-  --background: #f8f7f4;
+  /* Warm off-white paper + burnt-orange brand. Fraunces + Inter,
+     journalism-data feel per the design spec. */
+  --background: #F7F4EE;
   --foreground: #15161c;
   --card: #ffffff;
   --card-foreground: #15161c;
   --popover: #ffffff;
   --popover-foreground: #15161c;
   --primary: #15161c;
-  --primary-foreground: #f8f7f4;
-  --secondary: #ecebe6;
+  --primary-foreground: #F7F4EE;
+  --secondary: #ece8df;
   --secondary-foreground: #15161c;
-  --muted: #ecebe6;
+  --muted: #ece8df;
   --muted-foreground: #56565f;
-  --accent: #ecebe6;
+  --accent: #ece8df;
   --accent-foreground: #15161c;
-  /* Destructive stays warm so error states feel distinct from the brand. */
   --destructive: #b23a1c;
-  --border: #e2e1dc;
-  --input: #e2e1dc;
-  --ring: #4338ca;
+  --border: #e2ddd4;
+  --input: #e2ddd4;
+  --ring: #B23A1C;
 
-  /* Brand: indigo-700 with a soft indigo-100 fill. */
-  --brand: #4338ca;
-  --brand-soft: #e7e5fa;
-  --rule: #e2e1dc;
+  /* Brand: burnt-orange with a soft warm tint. */
+  --brand: #B23A1C;
+  --brand-soft: #fbeee8;
+  --rule: #e2ddd4;
 
   --chart-1: #15161c;
   --chart-2: #56565f;
-  --chart-3: #4338ca;
-  --chart-4: #8b85e8;
-  --chart-5: #ecebe6;
+  --chart-3: #B23A1C;
+  --chart-4: #d4714e;
+  --chart-5: #ece8df;
 
   /* Larger baseline radius so cards feel like cards, not Excel cells. */
   --radius: 0.625rem;
@@ -122,14 +119,14 @@
   --shadow-inset-rule:
     inset 0 -1px 0 0 rgba(229, 223, 212, 0.7);
 
-  --sidebar: #f8f7f4;
+  --sidebar: #F7F4EE;
   --sidebar-foreground: #15161c;
   --sidebar-primary: #15161c;
-  --sidebar-primary-foreground: #f8f7f4;
-  --sidebar-accent: #ecebe6;
+  --sidebar-primary-foreground: #F7F4EE;
+  --sidebar-accent: #ece8df;
   --sidebar-accent-foreground: #15161c;
-  --sidebar-border: #e2e1dc;
-  --sidebar-ring: #4338ca;
+  --sidebar-border: #e2ddd4;
+  --sidebar-ring: #B23A1C;
 }
 
 @layer base {

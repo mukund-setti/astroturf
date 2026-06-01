@@ -34,14 +34,14 @@ export function TemplateQuote({ representative }: TemplateQuoteProps) {
           {postedDate ? (
             <>
               <span aria-hidden className="text-rule">
-                ·
+                /
               </span>
               <span className="tabular-nums">{postedDate}</span>
             </>
           ) : null}
 
           <span aria-hidden className="text-rule">
-            ·
+            /
           </span>
           {representative.submitter_name ? (
             <span className="normal-case tracking-normal text-xs">
@@ -56,7 +56,7 @@ export function TemplateQuote({ representative }: TemplateQuoteProps) {
           {representative.text_source ? (
             <>
               <span aria-hidden className="text-rule">
-                ·
+                /
               </span>
               <span className="font-mono normal-case tracking-normal text-[11px]">
                 source: {representative.text_source}

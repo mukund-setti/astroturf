@@ -43,9 +43,9 @@ export function ClusterHeader({
         >
           Cluster{" "}
           <span className="font-mono normal-case tracking-normal text-[12px]">
-            {shortId}…
+            {shortId}...
           </span>{" "}
-          · {source}
+          / {source}
         </p>
 
         <h1 className="font-display text-5xl md:text-7xl leading-[1.04] tracking-[-0.015em] text-foreground">
@@ -64,7 +64,7 @@ export function ClusterHeader({
               <span className="italic">(unsigned)</span>
             )}
             {repDate ? (
-              <span className="text-muted-foreground"> · {repDate}</span>
+              <span className="text-muted-foreground"> / {repDate}</span>
             ) : null}
           </Meta>
 
@@ -73,7 +73,7 @@ export function ClusterHeader({
             {dayCount && dayCount > 1 ? (
               <span className="text-muted-foreground tabular-nums">
                 {" "}
-                · {dayCount} days
+                / {dayCount} days
               </span>
             ) : null}
           </Meta>

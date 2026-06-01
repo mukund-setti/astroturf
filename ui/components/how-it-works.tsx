@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 interface Step {
   title: string;
@@ -53,7 +53,7 @@ const STEPS: Step[] = [
     body: (
       <>
         A two-stage clusterer collapses the {" "}
-        <code className="font-mono text-[0.95em] text-foreground">O(N²)</code>{" "}
+        <code className="font-mono text-[0.95em] text-foreground">O(N^2)</code>{" "}
         comparison space: <strong className="text-foreground">MinHash/LSH</strong>{" "}
         on token shingles generates candidate pairs; cosine similarity over
         the Vector Search index confirms semantic neighbors above a tunable
@@ -74,7 +74,7 @@ const STEPS: Step[] = [
         <strong className="text-foreground">MigrationAgent</strong> compares
         cluster template language against the final agency rule text to
         flag phrase-level migration. Both write capped-confidence,
-        caveat-bearing rows — never silent accusations.
+        caveat-bearing rows - never silent accusations.
       </>
     ),
   },

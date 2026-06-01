@@ -1,4 +1,4 @@
-import type { AnalysisRequest } from "./analysis-store";
+﻿import type { AnalysisRequest } from "./analysis-store";
 
 export interface DatabricksRunResponse {
   run_id: number;
@@ -170,7 +170,7 @@ export async function getRunStatus(runId: string): Promise<DatabricksRunResponse
 /**
  * Fetches a notebook task's exit message (the string passed to
  * dbutils.notebook.exit). Returns null if the API does not surface one or the
- * fetch fails — callers should treat absence as "no exit message available"
+ * fetch fails - callers should treat absence as "no exit message available"
  * rather than as an error, because this is purely diagnostic.
  *
  * For a multi-task job run we walk the first task's run_id, because that is

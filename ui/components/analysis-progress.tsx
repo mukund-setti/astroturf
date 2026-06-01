@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,16 +48,16 @@ const POLL_INTERVAL_MS = 10000;
  * Auto-polling progress panel for an analysis request. Replaces the manual
  * "Sync Databricks Run" babysitting button:
  *
- *   - Polls /api/analysis/[id]/progress every 10s while the run is in flight.
- *   - Shows live per-stage row counts updating in place.
- *   - Computes "expected by N rows" using ui/lib/runtime-estimate so the user
+ *  - Polls /api/analysis/[id]/progress every 10s while the run is in flight.
+ *  - Shows live per-stage row counts updating in place.
+ *  - Computes "expected by N rows" using ui/lib/runtime-estimate so the user
  *     can see "stage 2/5: 12,431 of expected ~20,697 rows".
- *   - Stops polling when the run is terminal, then forces a server-side
+ *  - Stops polling when the run is terminal, then forces a server-side
  *     re-render of the surrounding page so any data-dependent UI updates.
- *   - Renders -1 as "syncing…" because Delta writes can transiently leave
+ *  - Renders -1 as "syncing..." because Delta writes can transiently leave
  *     a path in a half-written state for the duration of a single MERGE
  *     transaction; we treat that as "in progress", not "empty". (The
- *     historical reason was the delta-rs FUSE bypass — see ADR-0017 for
+ *     historical reason was the delta-rs FUSE bypass - see ADR-0017 for
  *     why we replaced it with Spark-native writes and why this -1 sentinel
  *     is still useful even after the bypass is gone.)
  */
@@ -107,7 +107,7 @@ export function AnalysisProgress({
       } catch (err) {
         if (cancelled) return;
         setPollError(err instanceof Error ? err.message : "Unknown poll error");
-        // Back off slightly on error but keep trying — transient SQL failures
+        // Back off slightly on error but keep trying - transient SQL failures
         // are expected (FUSE bypass intermittent reads).
         timer = setTimeout(poll, POLL_INTERVAL_MS * 2);
       }
@@ -149,7 +149,7 @@ export function AnalysisProgress({
   const elapsedMin = Math.max(0, elapsedMs / 60000);
 
   // Honest progress accounting. When ANY stage row count is observable
-  // (>= 0), use the row-based fraction — that's the lakehouse truth. When
+  // (>= 0), use the row-based fraction - that's the lakehouse truth. When
   // every stage read is the -1 sentinel (FUSE bypass mid-write), fall back
   // to a small time-derived placeholder capped at 0.5 so we don't imply
   // near-completion. Terminal status pins to 100% with a colour change.
@@ -189,7 +189,7 @@ export function AnalysisProgress({
             Live pipeline progress
           </span>
           <span className="text-xs text-muted-foreground">
-            Auto-refreshing every {Math.round(POLL_INTERVAL_MS / 1000)}s — no manual sync needed.
+            Auto-refreshing every {Math.round(POLL_INTERVAL_MS / 1000)}s - no manual sync needed.
             {lastPollAt && (
               <>
                 {" "}
@@ -275,17 +275,17 @@ export function AnalysisProgress({
         );
       })()}
 
-      {/* Calm status banner. Default is "everything is fine" — we only
+      {/* Calm status banner. Default is "everything is fine" - we only
           escalate to amber/red when the pipeline genuinely hits trouble
           (terminal failed/canceled state). Slower-than-ETA is not a
-          problem — that's why we re-project the total above. */}
+          problem - that's why we re-project the total above. */}
       {!isTerminal && (
         <div className="text-[11px] text-emerald-700 bg-emerald-500/5 border border-emerald-500/20 rounded-sm p-2 leading-snug">
           <strong>Pipeline is running normally.</strong>{" "}
           {haveAnyObservableRows
             ? `Currently in stage ${currentStageDescription(counts, expectedScale)}. Projected to finish at ~${formatRuntime(displayedTotalMinutes)} elapsed.`
             : `Databricks compute is warming up (Serverless cold start typically takes 2-4 min). The first row counts will appear shortly.`}
-          {" "}You can leave this page open or come back later — progress is auto-saved.
+          {" "}You can leave this page open or come back later - progress is auto-saved.
         </div>
       )}
       {status === "failed" && progress?.error_message && (
@@ -340,9 +340,9 @@ function currentStageDescription(
   const embed = counts.comment_embeddings < 0 ? 0 : counts.comment_embeddings;
   const clusters = counts.clusters < 0 ? 0 : counts.clusters;
   const exportRows = counts.export_rows < 0 ? 0 : counts.export_rows;
-  if (ingest < expectedScale) return `1 of 5 (ingesting comments — ${ingest.toLocaleString()} of ~${expectedScale.toLocaleString()})`;
-  if (parse < expectedScale) return `2 of 5 (parsing — ${parse.toLocaleString()} of ${ingest.toLocaleString()})`;
-  if (embed < expectedScale) return `3 of 5 (embedding — ${embed.toLocaleString()} of ${parse.toLocaleString()})`;
+  if (ingest < expectedScale) return `1 of 5 (ingesting comments - ${ingest.toLocaleString()} of ~${expectedScale.toLocaleString()})`;
+  if (parse < expectedScale) return `2 of 5 (parsing - ${parse.toLocaleString()} of ${ingest.toLocaleString()})`;
+  if (embed < expectedScale) return `3 of 5 (embedding - ${embed.toLocaleString()} of ${parse.toLocaleString()})`;
   if (clusters === 0) return "4 of 5 (clustering)";
   if (exportRows === 0) return "5 of 5 (exporting to demo table)";
   return "5 of 5 (finalizing)";
@@ -385,7 +385,7 @@ function StageBox({
       </div>
       <div className="font-mono text-sm text-foreground">
         {isSyncing ? (
-          <span className="text-muted-foreground italic text-xs">syncing…</span>
+          <span className="text-muted-foreground italic text-xs">syncing...</span>
         ) : showAsCount ? (
           safeRows.toLocaleString()
         ) : (
@@ -401,7 +401,7 @@ function StageBox({
       {!showAsCount && expected > 0 && (
         <div className="h-1 bg-secondary rounded-full overflow-hidden mt-2">
           {isSyncing && active ? (
-            // Row count is the -1 sentinel and the stage is still active —
+            // Row count is the -1 sentinel and the stage is still active - 
             // the FUSE bypass is mid-rmtree/copytree so reads transiently
             // fail. Show an indeterminate shimmer so the user can see
             // "something is happening" instead of a flat empty bar.

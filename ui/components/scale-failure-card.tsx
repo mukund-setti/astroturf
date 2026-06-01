@@ -1,4 +1,4 @@
-export function ScaleFailureCard() {
+﻿export function ScaleFailureCard() {
   const scalingData = [
     { n: "1,000", ram: "4 MB", status: "Local Safe" },
     { n: "5,000", ram: "100 MB", status: "Local Safe (Capped)" },
@@ -12,7 +12,7 @@ export function ScaleFailureCard() {
       <div className="flex items-center gap-2 mb-6">
         <span className="h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
         <h3 className="font-display text-xl md:text-2xl text-foreground">
-          The O(N²) Memory Wall: Why Local Clustering Fails
+          The O(N^2) Memory Wall: Why Local Clustering Fails
         </h3>
       </div>
 
@@ -47,8 +47,7 @@ export function ScaleFailureCard() {
                 <td className="p-3 font-mono tabular-nums">{row.n} comments</td>
                 <td className="p-3 font-mono tabular-nums">{row.ram}</td>
                 <td className="p-3 flex items-center gap-2 font-mono">
-                  {(row.isCrash || row.isFatal) && <span>⚠️</span>}
-                  {row.status}
+                  {(row.isCrash || row.isFatal) && <span className="font-semibold">!</span>}\r\n                  {row.status}
                 </td>
               </tr>
             ))}

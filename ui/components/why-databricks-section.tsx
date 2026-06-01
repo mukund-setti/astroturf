@@ -1,4 +1,4 @@
-import { Database, Sparkles, Network, Workflow, ScrollText, PlugZap, type LucideIcon } from "lucide-react";
+﻿import { Database, Sparkles, Network, Workflow, ScrollText, PlugZap, type LucideIcon } from "lucide-react";
 
 export function WhyDatabricksSection() {
   const cards: Array<{
@@ -9,7 +9,7 @@ export function WhyDatabricksSection() {
   }> = [
     {
       title: "Delta Lake + Unity Catalog",
-      bottleneck: "Interrupted ingestion · re-run drift",
+      bottleneck: "Interrupted ingestion / re-run drift",
       solution:
         "Every one of the six agents writes through Delta MERGE on a stable primary key. ACID transactions guarantee that 87-minute ECFS slices, mid-rate-limit retries, and partial-failure replays all converge to the same idempotent bronze/silver/gold tables. Unity Catalog adds column-level RBAC for PII isolation.",
       Icon: Database,
@@ -22,7 +22,7 @@ export function WhyDatabricksSection() {
           1024-d semantic embeddings via{" "}
           <code className="font-mono text-foreground">databricks-bge-large-en</code>{" "}
           served from a managed endpoint. No GPU pool to provision, no PyTorch
-          containers to keep warm, no quantization to debug — just a billed
+          containers to keep warm, no quantization to debug - just a billed
           request per comment with automatic retries and rate-limit shaping
           inside the EmbeddingAgent backend.
         </>
@@ -31,7 +31,7 @@ export function WhyDatabricksSection() {
     },
     {
       title: "Vector Search",
-      bottleneck: "O(N²) pairwise comparison wall",
+      bottleneck: "O(N^2) pairwise comparison wall",
       solution:
         "MinHash/LSH generates candidate pairs cheaply, then Vector Search confirms semantic neighbors over an HNSW index synced from the silver embeddings Delta table. Cluster confirmation drops from a contiguous float32 similarity matrix to a sub-quadratic index lookup, so the pipeline stays linear in docket size.",
       Icon: Network,
@@ -56,7 +56,7 @@ export function WhyDatabricksSection() {
       title: "MLflow audit trails",
       bottleneck: "Unverifiable regulatory provenance",
       solution:
-        "Each agent emits an MLflow run with inputs (docket_id, source, config), outputs (per-stage row counts, quality metrics), and timing. Threshold bounds, exact model versions, and rate-limit budget consumption are all reconstructable from the experiment — required pedigree for any downstream regulatory citation.",
+        "Each agent emits an MLflow run with inputs (docket_id, source, config), outputs (per-stage row counts, quality metrics), and timing. Threshold bounds, exact model versions, and rate-limit budget consumption are all reconstructable from the experiment - required pedigree for any downstream regulatory citation.",
       Icon: ScrollText,
     },
     {
@@ -67,7 +67,7 @@ export function WhyDatabricksSection() {
           The Next.js UI queries the actual Delta tables (via{" "}
           <code className="font-mono text-foreground">delta.`/Volumes/.../path`</code>{" "}
           and the SQL warehouse) for cluster_review_export, per-stage row
-          counts, and Delta history. Zero mock data in the production path —
+          counts, and Delta history. Zero mock data in the production path - 
           when the live counts disagree with what the page shows, the page is
           wrong, not the warehouse.
         </>
@@ -79,7 +79,7 @@ export function WhyDatabricksSection() {
   return (
     <section className="relative border-b border-rule/60 bg-secondary/30">
       <div className="mx-auto max-w-6xl px-6 py-20 md:py-24">
-        {/* Section Header — left-aligned, conversational, no shouting badge. */}
+        {/* Section Header - left-aligned, conversational, no shouting badge. */}
         <div className="max-w-[60ch] mb-14">
           <p className="text-sm text-brand font-medium mb-3">The infrastructure</p>
           <h2 className="font-display text-3xl md:text-5xl text-foreground tracking-tight leading-[1.05]">
@@ -92,7 +92,7 @@ export function WhyDatabricksSection() {
           </p>
         </div>
 
-        {/* Feature Grid — two columns on desktop for breathing room. */}
+        {/* Feature Grid - two columns on desktop for breathing room. */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {cards.map((card, idx) => {
             const { Icon } = card;

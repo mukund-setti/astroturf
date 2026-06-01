@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getDiscoveredDocket } from "@/lib/docket-catalog";
 
 /**
@@ -6,7 +6,7 @@ import { getDiscoveredDocket } from "@/lib/docket-catalog";
  *
  * Looks up a docket ID in the catalog (Supabase Postgres) and returns
  * its metadata for form auto-fill. Returns { found: false } when the
- * docket is not in the catalog — callers should degrade gracefully.
+ * docket is not in the catalog - callers should degrade gracefully.
  */
 export async function POST(request: Request) {
   try {

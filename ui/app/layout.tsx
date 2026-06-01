@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Astroturf — Coordinated comment campaigns in federal rulemaking",
+  title: "Astroturf - Coordinated comment campaigns in federal rulemaking",
   description:
     "Detecting coordinated public comment campaigns in federal rulemaking.",
 };

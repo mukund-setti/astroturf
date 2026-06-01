@@ -185,27 +185,27 @@ export function ArchitectureDiagram() {
               y={y0}
               tier="SOURCE"
               title="regulations.gov + FCC ECFS"
-              subtitle="dual federal APIs · shared api.data.gov rate budget"
+              subtitle="dual federal APIs / shared api.data.gov rate budget"
             />
             <Arrow
               fromY={bot(y0)}
               toY={y1}
               agent="IngestionAgent"
               dbxFeature="UNITY CATALOG + DELTA MERGE"
-              dbxSub="idempotent · MLflow run per ingestion"
+              dbxSub="idempotent / MLflow run per ingestion"
             />
 
             <Tile
               y={y1}
               tier="BRONZE"
               title="raw_comments"
-              subtitle="Delta table · partitioned by docket_id"
+              subtitle="Delta table / partitioned by docket_id"
             />
             <Arrow
               fromY={bot(y1)}
               toY={y2}
               agent="ParserAgent"
-              dbxFeature="WORKFLOWS · SOURCE-AWARE"
+              dbxFeature="WORKFLOWS / SOURCE-AWARE"
               dbxSub="ECFS skips detail-fetch; regs.gov enriches"
             />
 
@@ -220,14 +220,14 @@ export function ArchitectureDiagram() {
               toY={y3}
               agent="EmbeddingAgent"
               dbxFeature="FOUNDATION MODEL API"
-              dbxSub="databricks-bge-large-en · 1024-d"
+              dbxSub="databricks-bge-large-en / 1024-d"
             />
 
             <Tile
               y={y3}
               tier="SILVER"
               title="comment_embeddings"
-              subtitle="Delta table · synced to Vector Search index"
+              subtitle="Delta table / synced to Vector Search index"
               tall
             />
             <Arrow
@@ -242,7 +242,7 @@ export function ArchitectureDiagram() {
               y={y4}
               tier="GOLD"
               title="comment_clusters"
-              subtitle="+ cluster_memberships · template + members"
+              subtitle="+ cluster_memberships / template + members"
               tall
             />
             <Arrow
@@ -256,7 +256,7 @@ export function ArchitectureDiagram() {
               y={y5}
               tier="DEMO"
               title="cluster_review_export"
-              subtitle="denormalized, UI-ready · one row per (cluster, comment)"
+              subtitle="denormalized, UI-ready / one row per (cluster, comment)"
             />
             <Arrow
               fromY={bot(y5)}
@@ -269,7 +269,7 @@ export function ArchitectureDiagram() {
               y={y6}
               tier="APP"
               title="Astroturf UI"
-              subtitle="this page · live queries, hourly revalidate"
+              subtitle="this page / live queries, hourly revalidate"
               accent
             />
           </svg>
@@ -278,7 +278,7 @@ export function ArchitectureDiagram() {
         <div className="mt-10 md:mt-12 max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="border border-rule bg-card p-5 rounded-sm">
             <p className="text-[10px] uppercase tracking-[0.22em] text-brand font-medium mb-2">
-              Side branch · AttributionAgent
+              Side branch / AttributionAgent
             </p>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Reads from <code className="font-mono text-foreground">gold.comment_clusters</code> and writes{" "}
@@ -287,7 +287,7 @@ export function ArchitectureDiagram() {
           </div>
           <div className="border border-rule bg-card p-5 rounded-sm">
             <p className="text-[10px] uppercase tracking-[0.22em] text-brand font-medium mb-2">
-              Side branch · MigrationAgent
+              Side branch / MigrationAgent
             </p>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Compares cluster template language against final agency rule text and writes{" "}

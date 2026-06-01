@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Date / number / string formatters used across the UI.
  *
  * All dates are interpreted as UTC because the underlying data ships timestamps
@@ -24,9 +24,9 @@ export function formatDateRange(
 ): string {
   const s = formatDate(start);
   const e = formatDate(end);
-  if (!s && !e) return "—";
+  if (!s && !e) return " - ";
   if (s && e && s === e) return s;
-  if (s && e) return `${s} — ${e}`;
+  if (s && e) return `${s} - ${e}`;
   return (s ?? e) as string;
 }
 
@@ -50,7 +50,7 @@ export function truncate(value: string | null | undefined, n: number): string {
   if (!value) return "";
   const trimmed = value.trim();
   if (trimmed.length <= n) return trimmed;
-  return trimmed.slice(0, Math.max(0, n - 1)).trimEnd() + "…";
+  return trimmed.slice(0, Math.max(0, n - 1)).trimEnd() + "...";
 }
 
 export function formatInt(value: number): string {

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getAnalysisRequest, updateAnalysisRequest } from "@/lib/analysis-store";
 import {
   getDetailedStageCounts,
@@ -22,11 +22,11 @@ const TERMINAL_STATUSES = new Set(["succeeded", "failed", "canceled"]);
  *
  * GET is safe to call on a short interval (e.g. every 10s from a client
  * component) because:
- *   - It never blocks on long Databricks calls.
- *   - It only writes back to the analysis store when the lifecycle state
- *     actually transitions (e.g. RUNNING → SUCCESS). Repeated polls during
+ *  - It never blocks on long Databricks calls.
+ *  - It only writes back to the analysis store when the lifecycle state
+ *     actually transitions (e.g. RUNNING -> SUCCESS). Repeated polls during
  *     the same state cause zero writes.
- *   - SQL stage counts are read in parallel and individual failures don't
+ *  - SQL stage counts are read in parallel and individual failures don't
  *     poison the whole response (see getDetailedStageCounts).
  *
  * Response shape is intentionally flat and JSON-stable so the client can
@@ -65,7 +65,7 @@ export async function GET(request: Request, { params }: Context) {
           nextStatus = "running";
         } else if (lifeCycle === "TERMINATED") {
           if (result === "SUCCESS") {
-            // Don't trust SUCCESS yet — verify rows actually exist. The
+            // Don't trust SUCCESS yet - verify rows actually exist. The
             // older deployed notebook silently reports SUCCESS for zero-row
             // dockets; this is the choke point that catches it.
             const counts = await getDetailedStageCounts(req.docket_id);

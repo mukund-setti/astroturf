@@ -31,7 +31,7 @@ export function CampaignCard({ cluster, variant }: CampaignCardProps) {
 
   return (
     <Link
-      href={`/campaign/${cluster.cluster_id}`}
+      href={`/legacy/campaign/${cluster.cluster_id}`}
       className="block group focus:outline-none"
     >
       <Card

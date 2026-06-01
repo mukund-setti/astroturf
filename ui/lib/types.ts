@@ -1,4 +1,4 @@
-export type Source = "semantic" | "exact_hash";
+﻿export type Source = "semantic" | "exact_hash";
 
 export interface StatsPayload {
   total_comments: number;
@@ -35,7 +35,7 @@ export interface ClusterRow {
   posted_date: string | null;
   source: Source;
   exported_at: string | null;
-  // Optional attribution / migration evidence — populated when
+  // Optional attribution / migration evidence - populated when
   // AttributionAgent / MigrationAgent have run (ADR-0015). Treat absence as
   // "Not yet analyzed"; never render as accusation.
   candidate_entity_name?: string | null;

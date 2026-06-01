@@ -1,4 +1,4 @@
-import { formatInt } from "@/lib/format";
+﻿import { formatInt } from "@/lib/format";
 
 interface HeroProps {
   largestSize: number;
@@ -21,8 +21,8 @@ export function Hero({
   ruleTitle,
   docketId,
 }: HeroProps) {
-  // We benchmark naive exact-string hashing as a fixed floor on FCC 17-108 —
-  // it finds 16 literal duplicates across the canonical full-docket reference
+  // We benchmark naive exact-string hashing as a fixed floor on FCC 17-108.
+  // It finds 16 literal duplicates across the canonical full-docket reference
   // run, and that number is independent of how many comments we choose to
   // semantically cluster in any given slice.
   const exactCount = 16;
@@ -44,10 +44,10 @@ export function Hero({
       />
 
       <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
-        {/* Eyebrow — kept short and conversational, no all-caps shouting. */}
+        {/* Eyebrow - kept short and conversational, no all-caps shouting. */}
         <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/5 px-3 py-1 text-xs text-brand">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand" />
-          <span className="font-medium">FCC docket {docketId} · landmark finding</span>
+          <span className="font-medium">FCC docket {docketId} / landmark finding</span>
         </div>
 
         {/* Headline. Slightly tighter measure, slightly larger leading for warmth. */}
@@ -62,7 +62,7 @@ export function Hero({
           of actionable evidence.
         </p>
 
-        {/* Hero stat row — three soft cards instead of one stark grid. */}
+        {/* Hero stat row - three soft cards instead of one stark grid. */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mb-12">
           <StatCard
             label="Naive exact hashing"
@@ -78,7 +78,7 @@ export function Hero({
           />
           <StatCard
             label="Detection lift"
-            value={`${liftRatio >= 10 ? liftRatio.toFixed(0) : liftRatio.toFixed(1)}×`}
+            value={`${liftRatio >= 10 ? liftRatio.toFixed(0) : liftRatio.toFixed(1)}x`}
             description="More coordinated comments recovered by switching from naive string match to semantic neighbours."
             tone="brand"
           />

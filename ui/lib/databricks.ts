@@ -1,4 +1,4 @@
-import type { StatsPayload, ClusterSummary, ClusterDetailPayload, ClusterRow, Source } from "./types";
+﻿import type { StatsPayload, ClusterSummary, ClusterDetailPayload, ClusterRow, Source } from "./types";
 
 export type DataMode = "mock" | "live" | "auto";
 type ResolvedDataSource = "live" | "fallback";
@@ -258,16 +258,16 @@ export interface DetailedStageCounts {
 /**
  * Live per-stage row counts for a docket, queried directly off the Delta
  * paths via the SQL warehouse. Used by the auto-polling analysis detail
- * page to render "Stage 2/5: parsing — 12,431 of 20,697 rows" while a
+ * page to render "Stage 2/5: parsing - 12,431 of 20,697 rows" while a
  * Databricks notebook is still mid-run.
  *
  * Each stage is queried independently and any single failure leaves -1
  * in that slot instead of throwing. Historically the dropouts came from
  * the delta-rs FUSE bypass making paths transiently unreadable during
- * its rmtree→copytree window (see ADR-0017); even after H1 swapped that
+ * its rmtree->copytree window (see ADR-0017); even after H1 swapped that
  * for Spark MERGE we keep the -1 sentinel because Spark transactions can
  * still leave a path briefly inconsistent for a downstream reader.
- * Callers should render -1 as "syncing…" rather than "zero rows".
+ * Callers should render -1 as "syncing..." rather than "zero rows".
  *
  * Returns null when live SQL is not available (mock mode, missing
  * warehouse env vars, etc.), with the same contract as
@@ -508,7 +508,7 @@ function executeMockQuery<T>(sql: string, params: NamedParams): T[] {
         similarity_threshold: 0.92,
         embedding_model: "BAAI/bge-large-en-v1.5",
         representative_comment_id: "10828445130115",
-        rep_text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact...",
+        rep_text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact...",
         rep_submitter_name: "Anonymous Citizen",
         rep_posted_date: "2017-08-28T19:00:02.000Z",
         earliest_posted_date: "2017-08-28T17:00:02.000Z",
@@ -532,7 +532,7 @@ function executeMockQuery<T>(sql: string, params: NamedParams): T[] {
         similarity_threshold: 0.92,
         embedding_model: "BAAI/bge-large-en-v1.5",
         representative_comment_id: "108282615031038",
-        rep_text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC’s existing rules and keep broadband internet access classified under Title II.",
+        rep_text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC's existing rules and keep broadband internet access classified under Title II.",
         rep_submitter_name: "Anonymous Citizen",
         rep_posted_date: "2017-08-28T19:00:02.000Z",
         earliest_posted_date: "2017-08-28T19:00:02.000Z",
@@ -676,7 +676,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
       comment_id: "10828445130115",
       is_representative: true,
       text_source: "detail_comment_text",
-      text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai’s proposal to hand the government-subsidized telecom giants like AT&T, Verizon, and Comcast free rein to create Internet fast lanes, stripping Internet users of the necessary privacy and access rules we demanded and just recently won. \r\n\r\nI’m afraid of a “pay-to-play” Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the existing net neutrality rules mean that Internet providers can’t slow or block customers’ ability to see certain web services or create Internet “fast lanes” by charging online services and websites more money to reach customers faster. That’s exactly the right balance to make sure competition in the Internet space is fair and benefits consumers and small businesses as well as larger players. Pai’s proposed repeal of the rules would transform ISPs into gatekeepers with an effective veto right on expression and innovation. That’s contrary to the basic precepts on which the Internet was built. \r\n\r\nIt Means Everything to me. \r\n\r\nThank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
+      text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai's proposal to hand the government-subsidized telecom giants like AT&T, Verizon, and Comcast free rein to create Internet fast lanes, stripping Internet users of the necessary privacy and access rules we demanded and just recently won. \r\n\r\nI'm afraid of a 'pay-to-play' Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the existing net neutrality rules mean that Internet providers can't slow or block customers' ability to see certain web services or create Internet 'fast lanes' by charging online services and websites more money to reach customers faster. That's exactly the right balance to make sure competition in the Internet space is fair and benefits consumers and small businesses as well as larger players. Pai's proposed repeal of the rules would transform ISPs into gatekeepers with an effective veto right on expression and innovation. That's contrary to the basic precepts on which the Internet was built. \r\n\r\nIt Means Everything to me. \r\n\r\nThank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
       submitter_name: "Anonymous Citizen",
       posted_date: "2017-08-28T19:00:02.000Z",
       source: "semantic",
@@ -693,7 +693,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
         comment_id: "108282535307158",
         is_representative: false,
         text_source: "detail_comment_text",
-        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai’s plan to hand the government-subsidized ISP monopolies like Verizon, Comcast, and AT&T the legal cover to create Internet fast lanes, stripping consumers of the meaningful access and privacy protections we demanded and won just two years ago. \r\n\r\nI’m afraid of a “pay-to-play” Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the current FCC regulations ensure that Internet providers can’t slow or block users’ access to certain web services or create Internet “fast lanes” by charging online services and websites money to reach customers faster. That’s exactly the right balance to make sure competition in the Internet space is fair and benefits small businesses and Internet users as well as larger players. Pai’s proposed repeal of the rules would help turn Internet providers into Internet gatekeepers with the ability to veto new innovation and expression. That’s not the kind of Internet we want to pass on to future generations of technology users. \r\n\r\nI grew up with our internet and throughout my time I have had great times with our internet on a variety of sites and this new plan could take away things that make the internet what it really is. A free network connecting millions. \r\n\r\nThank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
+        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai's plan to hand the government-subsidized ISP monopolies like Verizon, Comcast, and AT&T the legal cover to create Internet fast lanes, stripping consumers of the meaningful access and privacy protections we demanded and won just two years ago. \r\n\r\nI'm afraid of a 'pay-to-play' Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the current FCC regulations ensure that Internet providers can't slow or block users' access to certain web services or create Internet 'fast lanes' by charging online services and websites money to reach customers faster. That's exactly the right balance to make sure competition in the Internet space is fair and benefits small businesses and Internet users as well as larger players. Pai's proposed repeal of the rules would help turn Internet providers into Internet gatekeepers with the ability to veto new innovation and expression. That's not the kind of Internet we want to pass on to future generations of technology users. \r\n\r\nI grew up with our internet and throughout my time I have had great times with our internet on a variety of sites and this new plan could take away things that make the internet what it really is. A free network connecting millions. \r\n\r\nThank you for keeping Title II net neutrality rules in place to protect Internet users like me.",
         submitter_name: "Eleanor Vance",
         posted_date: "2017-08-28T19:00:02.000Z",
         source: "semantic",
@@ -709,7 +709,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
         comment_id: "1082893935836",
         is_representative: false,
         text_source: "detail_comment_text",
-        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai’s proposal to hand the government-subsidized ISP monopolies like Comcast, Verizon, and AT&T free rein to engage in data discrimination, stripping users of the necessary privacy and access safeguards we worked for and so recently won. \r\n\r\nI’m worried about creating a tiered Internet with “fast lanes” for certain sites or services because ISPs could have too much power to determine what I can do online. Thankfully, the existing Open Internet Open Internet rules mean that ISPs can’t slow or block our access to certain web services or create Internet “fast lanes” by charging websites and online services money to reach consumers faster. That’s exactly the right balance to ensure the Internet remains a level playing field that benefits consumers and small businesses as well as entrenched Internet companies. Chairman Pai’s proposed repeal of the rules would help turn ISPs into Internet gatekeepers with the ability to veto new expression and innovation. That’s not the kind of Internet we want to pass on to future generations of technology users. \r\n\r\nI appreciate you maintaining Title II net neutrality rules and the rights of Internet users like me.",
+        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai's proposal to hand the government-subsidized ISP monopolies like Comcast, Verizon, and AT&T free rein to engage in data discrimination, stripping users of the necessary privacy and access safeguards we worked for and so recently won. \r\n\r\nI'm worried about creating a tiered Internet with 'fast lanes' for certain sites or services because ISPs could have too much power to determine what I can do online. Thankfully, the existing Open Internet Open Internet rules mean that ISPs can't slow or block our access to certain web services or create Internet 'fast lanes' by charging websites and online services money to reach consumers faster. That's exactly the right balance to ensure the Internet remains a level playing field that benefits consumers and small businesses as well as entrenched Internet companies. Chairman Pai's proposed repeal of the rules would help turn ISPs into Internet gatekeepers with the ability to veto new expression and innovation. That's not the kind of Internet we want to pass on to future generations of technology users. \r\n\r\nI appreciate you maintaining Title II net neutrality rules and the rights of Internet users like me.",
         submitter_name: "Gregory House",
         posted_date: "2017-08-28T17:00:02.000Z",
         source: "semantic",
@@ -725,7 +725,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
         comment_id: "108280080014462",
         is_representative: false,
         text_source: "detail_comment_text",
-        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who’ve urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai’s proposal to give the ISP monopolies like Comcast, Verizon, and AT&T free rein to give access rules, stripping consumers of the meaningful privacy and access safeguards we worked for and won just two years ago. \r\n\r\nI’m afraid of a “pay-to-play” Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the current Open Internet Open Internet rules mean that ISP monopolies can’t slow or block our access to certain web services or create Internet “fast lanes” by charging websites and online services more money to reach people faster. That’s exactly the right balance to ensure the Internet remains a level playing field that benefits consumers and small businesses as well as larger players. Pai’s proposed repeal of the rules would help turn Internet providers into Internet gatekeepers with the ability to veto new expression and innovation. That’s contrary to the basic precepts on which the Internet was built. \r\n\r\nThe internet belongs to everyone. \r\n\r\nThanks for protecting Internet users like me by upholding the existing Title II net neutrality rules.",
+        text_preview: "We need the FCC to defend the rights of millions of Internet users by upholding net neutrality protections. I stand with the millions of other Internet users who've urged the Commission to keep important net neutrality protections intact. \r\n\r\nThe FCC should reject Chairman Ajit Pai's proposal to give the ISP monopolies like Comcast, Verizon, and AT&T free rein to give access rules, stripping consumers of the meaningful privacy and access safeguards we worked for and won just two years ago. \r\n\r\nI'm afraid of a 'pay-to-play' Internet where ISPs can charge more for certain websites because ISPs could have too much power to determine what I can do online. Thankfully, the current Open Internet Open Internet rules mean that ISP monopolies can't slow or block our access to certain web services or create Internet 'fast lanes' by charging websites and online services more money to reach people faster. That's exactly the right balance to ensure the Internet remains a level playing field that benefits consumers and small businesses as well as larger players. Pai's proposed repeal of the rules would help turn Internet providers into Internet gatekeepers with the ability to veto new expression and innovation. That's contrary to the basic precepts on which the Internet was built. \r\n\r\nThe internet belongs to everyone. \r\n\r\nThanks for protecting Internet users like me by upholding the existing Title II net neutrality rules.",
         submitter_name: "Robert Chase",
         posted_date: "2017-08-28T19:00:02.000Z",
         source: "semantic",
@@ -784,7 +784,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
       comment_id: "108282615031038",
       is_representative: true,
       text_source: "detail_comment_text",
-      text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC’s existing rules and keep broadband internet access classified under Title II.",
+      text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC's existing rules and keep broadband internet access classified under Title II.",
       submitter_name: "Anonymous Citizen",
       posted_date: "2017-08-28T19:00:02.000Z",
       source: "semantic",
@@ -800,7 +800,7 @@ function getMockClusterRows(clusterId: string): Record<string, unknown>[] {
       comment_id: "108282763324605",
       is_representative: false,
       text_source: "detail_comment_text",
-      text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC’s existing rules and keep broadband internet access classified under Title II.",
+      text_preview: "I urge FCC Chairman Ajit Pai to preserve real Net Neutrality under the FCC's existing rules and keep broadband internet access classified under Title II.",
       submitter_name: "Allison Cameron",
       posted_date: "2017-08-28T19:00:02.000Z",
       source: "semantic",

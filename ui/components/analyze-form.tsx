@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
@@ -361,9 +361,9 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
                 )}
               >
                 {lookupStatus === "loading"
-                  ? "Looking up…"
+                  ? "Looking up..."
                   : lookupStatus === "found"
-                  ? "✓ Found"
+                  ? "OK Found"
                   : "Lookup"}
               </button>
             </div>
@@ -374,7 +374,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             )}
             {lookupStatus === "not_found" && (
               <span className="block mt-1 text-[10px] text-muted-foreground">
-                Not in catalog — fill fields manually or submit to discover.
+                Not in catalog - fill fields manually or submit to discover.
               </span>
             )}
           </label>
@@ -465,7 +465,7 @@ export function AnalyzeForm({ initial, knownDockets, executionMode = "command" }
             {etaEstimate.warnings.length > 0 && (
               <ul className="mt-2 space-y-1 text-[10px] text-amber-500 leading-snug">
                 {etaEstimate.warnings.map((w, i) => (
-                  <li key={i}>· {w}</li>
+                  <li key={i}>/ {w}</li>
                 ))}
               </ul>
             )}

@@ -1,4 +1,4 @@
-import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
+﻿import { query as pgQuery, isConnectionError, sanitizeDatabaseError } from "./db";
 
 export interface AnalysisRequest {
   request_id: string;
@@ -17,9 +17,15 @@ export interface AnalysisRequest {
   updated_at: string;
   error_message: string | null;
   result_url: string | null;
+  // Columns added in migration 004 for the consumer-facing queue flow.
+  // Older /api/analysis POSTs leave these null; the new /api/queue-analysis
+  // POST populates all three.
+  requested_by: string | null;
+  query_text: string | null;
+  topic_slug: string | null;
 }
 
-// Supabase Postgres is the only store. No more local JSON fallback — every
+// Supabase Postgres is the only store. No more local JSON fallback - every
 // store call goes through pgQuery. Connection-level failures (DB unreachable)
 // degrade gracefully on reads via isConnectionError(); query-level failures
 // (bad SQL, schema mismatch) and all writes throw.
@@ -65,23 +71,42 @@ export async function getAnalysisRequest(id: string): Promise<AnalysisRequest | 
 }
 
 /**
- * Create a new analysis request.
+ * Create a new analysis request. The three "consumer-flow" columns
+ * (requested_by, query_text, topic_slug) are optional - legacy callers
+ * from /api/analysis don't supply them, the new /api/queue-analysis does.
  */
 export async function createAnalysisRequest(
   input: Omit<
     AnalysisRequest,
-    "request_id" | "status" | "databricks_run_id" | "created_at" | "updated_at" | "error_message" | "result_url"
-  >
+    | "request_id"
+    | "status"
+    | "databricks_run_id"
+    | "created_at"
+    | "updated_at"
+    | "error_message"
+    | "result_url"
+    | "requested_by"
+    | "query_text"
+    | "topic_slug"
+  > & {
+    requested_by?: string | null;
+    query_text?: string | null;
+    topic_slug?: string | null;
+  },
 ): Promise<AnalysisRequest> {
   const id = `req_${Math.random().toString(36).substring(2, 11)}`;
   const now = new Date().toISOString();
+  const requested_by = input.requested_by ?? null;
+  const query_text = input.query_text ?? null;
+  const topic_slug = input.topic_slug ?? null;
 
   await pgQuery(
     `INSERT INTO analysis_requests (
       request_id, docket_id, source, topic_id, agency_id, title,
       date_start, date_end, expected_scale, notes, status,
-      databricks_run_id, error_message, result_url, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      databricks_run_id, error_message, result_url, created_at, updated_at,
+      requested_by, query_text, topic_slug
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
     [
       id,
       input.docket_id,
@@ -99,7 +124,10 @@ export async function createAnalysisRequest(
       null,
       now,
       now,
-    ]
+      requested_by,
+      query_text,
+      topic_slug,
+    ],
   );
 
   return {
@@ -111,6 +139,9 @@ export async function createAnalysisRequest(
     updated_at: now,
     error_message: null,
     result_url: null,
+    requested_by,
+    query_text,
+    topic_slug,
   };
 }
 
@@ -218,5 +249,35 @@ function mapRowToRequest(row: Record<string, unknown>): AnalysisRequest {
     updated_at: new Date(row.updated_at as string).toISOString(),
     error_message: (row.error_message as string) || null,
     result_url: (row.result_url as string) || null,
+    requested_by: (row.requested_by as string | null) ?? null,
+    query_text: (row.query_text as string | null) ?? null,
+    topic_slug: (row.topic_slug as string | null) ?? null,
   };
+}
+
+/**
+ * List analysis requests created by a given user UID (the astroturf_uid
+ * cookie), newest first. Used by the UserRequestsBadge.
+ */
+export async function listAnalysisRequestsForUser(
+  uid: string,
+  limit = 20,
+): Promise<AnalysisRequest[]> {
+  try {
+    const rows = await pgQuery<Record<string, unknown>>(
+      `SELECT * FROM analysis_requests
+        WHERE requested_by = $1
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [uid, limit],
+    );
+    return rows.map(mapRowToRequest);
+  } catch (err) {
+    console.error(
+      `listAnalysisRequestsForUser(${uid}) failed:`,
+      sanitizeDatabaseError(err),
+    );
+    if (isConnectionError(err)) return [];
+    throw err;
+  }
 }
