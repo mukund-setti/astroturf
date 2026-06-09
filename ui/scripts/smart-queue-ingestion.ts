@@ -70,17 +70,6 @@ const CANDIDATES: Candidate[] = [
     notes: "Health-care pricing topic; good consumer-facing contrast to telecom and climate.",
   },
   {
-    docket_id: "ED-2018-OCR-0064",
-    source: "regulations_gov",
-    agency_id: "ED",
-    topic_id: "education",
-    topic_slug: "education",
-    title: "Title IX Sexual Harassment Rules",
-    expected_scale: 5000,
-    query_text: "campus sexual harassment rules",
-    notes: "Education/civil-rights docket already represented by small clusters; queue larger sample.",
-  },
-  {
     docket_id: "EPA-HQ-OW-2021-0602",
     source: "regulations_gov",
     agency_id: "EPA",

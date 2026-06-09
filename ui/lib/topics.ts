@@ -115,18 +115,6 @@ export const TOPICS: Topic[] = [
       "overtime",
     ],
   },
-  {
-    slug: "education",
-    label: "education",
-    keywords: [
-      "education",
-      "schools",
-      "student",
-      "loans",
-      "title-ix",
-      "college",
-    ],
-  },
 ];
 
 export function getTopicBySlug(slug: string): Topic | undefined {
@@ -165,7 +153,6 @@ export function topicForDocket(
     "CMS-2018-0114": "health-care",
     "EPA-HQ-OW-2021-0602": "environment",
     "CFPB-2018-0035": "banking-and-lending",
-    "ED-2018-OCR-0064": "education",
     "FTC-2023-0007": "tech-regulation",
     "CMS-2019-0006": "health-care",
   };
@@ -183,7 +170,6 @@ export function topicForDocket(
   if (upper === "CFPB") return "banking-and-lending";
   if (upper === "DOL") return "labor";
   if (upper === "OSHA") return "labor";
-  if (upper === "ED") return "education";
   if (upper === "BIS") return "the-economy";
 
   return "the-economy";
